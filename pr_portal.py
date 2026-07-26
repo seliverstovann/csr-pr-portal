@@ -3,6 +3,8 @@ from openai import OpenAI
 import PyPDF2
 from pptx import Presentation
 import io
+import docx
+import pandas as pd
 
 st.set_page_config(page_title="PR-портал ЦСР", page_icon="⚡️")
 
@@ -26,6 +28,16 @@ def extract_text_from_file(uploaded_file):
             for shape in slide.shapes:
                 if hasattr(shape, "text"):
                     text += shape.text + "\n"
+    elif uploaded_file.name.endswith('.docx'):
+        doc = docx.Document(uploaded_file)
+        for para in doc.paragraphs:
+            text += para.text + "\n"
+    elif uploaded_file.name.endswith('.xlsx'):
+        # Читаем все листы из Excel-файла
+        xls = pd.read_excel(uploaded_file, sheet_name=None)
+        for sheet_name, df in xls.items():
+            text += f"--- Лист: {sheet_name} ---\n"
+            text += df.to_string(index=False) + "\n\n"
     return text
 
 # Главный выбор задачи
@@ -58,7 +70,7 @@ if task == "Написать пост для Telegram-канала ЦСР":
     speaker = st.text_input("Спикер (Фамилия, Имя, Должность - если есть):")
     
     materials_text = st.text_area("Вставьте сырой текст, тезисы или цифры:", height=150)
-    uploaded_file = st.file_uploader("Или загрузите файл (PDF, PPTX):", type=["pdf", "pptx"])
+    uploaded_file = st.file_uploader("Или загрузите файл (PDF, PPTX, DOCX, XLSX):", type=["pdf", "pptx", "docx", "xlsx"])
     
     # Сборка финального текста для ИИ
     extracted_file_text = ""
