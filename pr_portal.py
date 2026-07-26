@@ -6,34 +6,35 @@ import io
 import docx
 import pandas as pd
 
-# 1. Настройка страницы (Широкий формат)
-st.set_page_config(
-    page_title="ЦСР PR-портал",
-    page_icon="⚡️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# 1. Настройка страницы
+st.set_page_config(page_title="ЦСР PR-портал", page_icon="⚡️", layout="wide", initial_sidebar_state="expanded")
 
 API_KEY = st.secrets["OPENAI_API_KEY"]
+client = OpenAI(api_key=API_KEY)
 
-# Функция для извлечения текста
+# Инициализация памяти (Session State)
+if "current_text" not in st.session_state:
+    st.session_state.current_text = ""
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "raw_source_data" not in st.session_state:
+    st.session_state.raw_source_data = ""
+
+# Вспомогательные функции
 def extract_text_from_file(uploaded_file):
     text = ""
     if uploaded_file.name.endswith('.pdf'):
         reader = PyPDF2.PdfReader(uploaded_file)
         for page in reader.pages:
-            if page.extract_text():
-                text += page.extract_text() + "\n"
+            if page.extract_text(): text += page.extract_text() + "\n"
     elif uploaded_file.name.endswith('.pptx'):
         prs = Presentation(uploaded_file)
         for slide in prs.slides:
             for shape in slide.shapes:
-                if hasattr(shape, "text"):
-                    text += shape.text + "\n"
+                if hasattr(shape, "text"): text += shape.text + "\n"
     elif uploaded_file.name.endswith('.docx'):
         doc = docx.Document(uploaded_file)
-        for para in doc.paragraphs:
-            text += para.text + "\n"
+        for para in doc.paragraphs: text += para.text + "\n"
     elif uploaded_file.name.endswith('.xlsx'):
         xls = pd.read_excel(uploaded_file, sheet_name=None)
         for sheet_name, df in xls.items():
@@ -41,132 +42,111 @@ def extract_text_from_file(uploaded_file):
             text += df.to_string(index=False) + "\n\n"
     return text
 
-# 2. Боковая панель (Настройки)
+def create_docx(text):
+    doc = docx.Document()
+    doc.add_paragraph(text)
+    bio = io.BytesIO()
+    doc.save(bio)
+    return bio.getvalue()
+
+# 2. Боковая панель
 with st.sidebar:
     st.title("ЦСР PR-портал")
     st.caption("Внутренний ИИ-ассистент пресс-службы")
     st.divider()
     
-    task = st.selectbox("Выберите задачу:", [
-        "Написать пост для Telegram-канала",
-        "Очистить статистику (для инфографики)"
+    task = st.selectbox("Выберите задачу:", ["Написать пост для Telegram-канала"])
+    post_category = st.selectbox("Рубрика поста:", [
+        "1. Анонс мероприятия", "2. Исследование", "3. Пост после мероприятия (Итоги)",
+        "4. Публикация в СМИ (Колонка / комментарий)", "5. Тематический пост",
+        "6. Индексы", "7. Публикация каталогов", "8. Еженедельная статистика (Коротко о ценах)",
+        "9. Рубрика: Цифры и факты"
     ])
     
-    post_category = None
-    if task == "Написать пост для Telegram-канала":
-        post_category = st.selectbox("Рубрика поста:", [
-            "1. Анонс мероприятия",
-            "2. Исследование",
-            "3. Пост после мероприятия (Итоги)",
-            "4. Публикация в СМИ (Колонка / комментарий)",
-            "5. Тематический пост (экономика, климат, транспорт и др.)",
-            "6. Индексы (Цен. доступность, Пасха, Оливье, Шашлык и др.)",
-            "7. Публикация каталогов",
-            "8. Еженедельная статистика (Коротко о ценах)",
-            "9. Рубрика: Цифры и факты"
-        ])
+    st.divider()
+    st.subheader("Настройки текста")
+    text_length = st.select_slider("Объем:", options=["Короткий (до 1000 зн.)", "Стандартный", "Развернутый (лонгрид)"], value="Стандартный")
+    tone = st.selectbox("Тональность:", ["Строгий (сухие факты, официально)", "Корпоративно-информационный (стандарт)", "Живой (вовлекающий, для соцсетей)"])
 
-# 3. Основной экран (Колонки)
+# 3. Основной экран
 left_column, right_column = st.columns([1.1, 0.9], gap="large")
 
 with left_column:
     st.subheader("Исходные данные")
-    
     with st.container(border=True):
-        if task == "Написать пост для Telegram-канала":
-            context = st.text_input("Контекст", placeholder="Мероприятие, исследование или инфоповод")
-            speaker = st.text_input("Спикер", placeholder="Имя, фамилия и должность")
-            materials_text = st.text_area("Факты, тезисы и исходный текст", height=180, placeholder="Вставьте сырой текст...")
-            uploaded_file = st.file_uploader("Загрузите файл (PDF, PPTX, DOCX, XLSX)", type=["pdf", "pptx", "docx", "xlsx"])
-        else:
-            raw_text_clean = st.text_area("Сырая статистика", height=280, placeholder="Введи текст с ошибками и дублями для очистки...")
-
-        generate = st.button("Сформировать материал", type="primary", use_container_width=True)
+        context = st.text_input("Контекст", placeholder="Мероприятие, исследование или инфоповод")
+        speaker = st.text_input("Спикер", placeholder="Имя, фамилия и должность")
+        materials_text = st.text_area("Факты, тезисы и исходный текст", height=180)
+        uploaded_file = st.file_uploader("Загрузите файл (PDF, PPTX, DOCX, XLSX)", type=["pdf", "pptx", "docx", "xlsx"])
+        
+        if st.button("Сформировать материал", type="primary", use_container_width=True):
+            extracted_file_text = extract_text_from_file(uploaded_file) if uploaded_file else ""
+            final_materials = materials_text + "\n" + extracted_file_text
+            st.session_state.raw_source_data = f"[КОНТЕКСТ]: {context}\n[СПИКЕР]: {speaker}\n[МАТЕРИАЛЫ]: {final_materials}"
+            
+            system_rules = f"""
+            Ты — PR-редактор. Пиши пост для Telegram-канала. Рубрика: {post_category}.
+            Тон: {tone}. Объем: {text_length}.
+            Заголовок: Первая строка жирным шрифтом. Подвал: всегда ⭐️ подписаться на канал.
+            """
+            
+            st.session_state.chat_history = [
+                {"role": "system", "content": system_rules},
+                {"role": "user", "content": st.session_state.raw_source_data}
+            ]
+            
+            with st.spinner('Пишу текст...'):
+                response = client.chat.completions.create(model="gpt-4o", messages=st.session_state.chat_history, temperature=0.4)
+                st.session_state.current_text = response.choices[0].message.content
+                st.session_state.chat_history.append({"role": "assistant", "content": st.session_state.current_text})
 
 with right_column:
     st.subheader("Результат")
-    
     with st.container(border=True):
-        text_tab, info_tab = st.tabs(["Готовый текст", "Служебная информация"])
+        text_tab, fact_tab = st.tabs(["Готовый текст", "Проверка фактов и цифр"])
         
-        with info_tab:
-            st.write("Здесь будут отображаться технические статусы и прочитанные данные.")
-            
         with text_tab:
-            if not generate:
-                st.info("👈 Заполните данные слева и нажмите «Сформировать материал»")
-            else:
-                # === ЛОГИКА ГЕНЕРАЦИИ ===
-                client = OpenAI(api_key=API_KEY)
+            if st.session_state.current_text:
+                # Используем блок кода для удобного копирования в 1 клик (иконка в правом верхнем углу блока)
+                st.code(st.session_state.current_text, language="markdown")
                 
-                if task == "Написать пост для Telegram-канала":
-                    extracted_file_text = ""
-                    if uploaded_file is not None:
-                        extracted_file_text = extract_text_from_file(uploaded_file)
-                        st.success(f"Файл прочитан!")
-                    
-                    final_materials = materials_text + "\n" + extracted_file_text
-                    raw_text = f"[КОНТЕКСТ]: {context}\n[СПИКЕР]: {speaker}\n[МАТЕРИАЛЫ]: {final_materials}"
-                    
-                    # Правила ИИ
-                    base_rules = """
-                    Ты — строгий редактор пресс-службы Центра стратегических разработок (ЦСР). 
-                    Пиши пост для Telegram-канала. Тон: объективный, аналитический, в третьем лице.
-                    Заголовок: Первая строка — четкий заголовок, ОБЯЗАТЕЛЬНО выделенный жирным шрифтом.
-                    Оформление цитат: Используй знак > в начале каждого абзаца цитаты. 
-                    Концовка: Добавь тематические хештеги (всегда начинай с #ЦСР #новости).
-                    Подвал: Последней строкой АБСОЛЮТНО ВСЕГДА должна стоять фраза: ⭐️ подписаться на канал
-                    """
-                    
-                    category_rules = ""
-                    if post_category == "8. Еженедельная статистика (Коротко о ценах)":
-                        category_rules = """
-                        СПЕЦИФИКА РУБРИКИ: Заголовок всегда "**Коротко о том, что происходило с ценами в предыдущую неделю и заслуживает внимания**".
-                        ЖЕСТКИЙ ФИЛЬТР ДАННЫХ: ПРОИГНОРИРУЙ всё лишнее и вытащи строго:
-                        1. Продовольственные товары (эмодзи 📈).
-                        2. Для автолюбителей (эмодзи ⛽️).
-                        3. Для путешественников (эмодзи 🧳).
-                        4. Медикаменты / Лекарства — ПРАВИЛО: выводи только конкретный процент изменения (например, +1.3%), строго без указания названий (не пиши "активированный уголь").
-                        В конце отдельной строкой укажи инфляцию.
-                        """
-                    elif post_category == "9. Рубрика: Цифры и факты":
-                        category_rules = """
-                        СПЕЦИФИКА РУБРИКИ: Заголовок всегда "**Цифры и факты**". 
-                        Используй цифры-эмодзи или значок ‼️ для каждого пункта.
-                        """
-                    elif post_category == "6. Индексы (Цен. доступность, Пасха, Оливье, Шашлык и др.)":
-                        category_rules = """
-                        СПЕЦИФИКА РУБРИКИ: 
-                        Если это «Индекс ценовой доступности...»: выдели индекс жирным, блок ‼️**Основные факторы:** маркированным списком 🔘.
-                        Если это сезонные гастрономические индексы: выдели общую стоимость корзины, выжимка продуктов (📈 подорожали, 📉 подешевели).
-                        """
-                    elif post_category == "1. Анонс мероприятия":
-                        category_rules = "СПЕЦИФИКА РУБРИКИ: Текст краткий, дата/время/место, эмодзи 📢, 🗓️, ⚡️."
-                    elif post_category == "3. Пост после мероприятия (Итоги)":
-                        category_rules = "СПЕЦИФИКА РУБРИКИ: Ключевые итоги, соглашения. Развернутая цитата спикера."
-                    
-                    system_rules = base_rules + "\n" + category_rules
-                    prompt_text = raw_text
-                    
-                else:
-                    system_rules = """
-                    Ты строгий PR-редактор. Очисти сырой текст для корпоративной инфографики.
-                    Всегда используй правильное написание «муниципальные» (никогда не пиши «нумиципальный») и следи за правильным написанием слова «влияние».
-                    Удаляй дублирующиеся блоки статистики. Выдавай только структурированные цифры (например, +1.3%).
-                    """
-                    prompt_text = raw_text_clean
+                # Кнопка скачивания Word
+                docx_data = create_docx(st.session_state.current_text)
+                st.download_button(label="📥 Скачать в формате Word (.docx)", data=docx_data, file_name="post.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                
+                st.divider()
+                st.write("🔄 **Внести правки:**")
+                refine_prompt = st.text_input("Что нужно изменить? (например: 'сделай короче', 'убери эмодзи')")
+                if st.button("Уточнить текст"):
+                    with st.spinner('Переписываю...'):
+                        st.session_state.chat_history.append({"role": "user", "content": refine_prompt})
+                        response = client.chat.completions.create(model="gpt-4o", messages=st.session_state.chat_history, temperature=0.3)
+                        st.session_state.current_text = response.choices[0].message.content
+                        st.session_state.chat_history.append({"role": "assistant", "content": st.session_state.current_text})
+                        st.rerun() # Перезагружаем интерфейс для отображения нового текста
+            else:
+                st.info("👈 Заполните данные слева и нажмите «Сформировать материал»")
 
-                # Запрос к нейросети
-                with st.spinner('Готовлю материал...'):
-                    try:
-                        response = client.chat.completions.create(
-                            model="gpt-4o-mini",
-                            messages=[
-                                {"role": "system", "content": system_rules},
-                                {"role": "user", "content": prompt_text}
-                            ],
-                            temperature=0.3
+        with fact_tab:
+            if st.session_state.current_text:
+                st.write("Здесь ИИ сверяет готовый текст с исходниками на предмет искажений.")
+                if st.button("Запустить проверку", type="primary"):
+                    fact_prompt = f"""
+                    Ты строгий фактчекер. Сравни ИСХОДНИКИ и ГОТОВЫЙ ТЕКСТ.
+                    1. Убедись, что все цифры, даты и фамилии перенесены без искажений.
+                    2. Найди дублирующиеся блоки статистики и подсвети их как ошибку.
+                    3. Жесткая проверка корпоративных стандартов: слово «муниципальные» написано корректно (опечатка «нумиципальный» недопустима), а при упоминании медикаментов выведены ТОЛЬКО проценты изменения без названий самих препаратов.
+                    
+                    ИСХОДНИКИ: {st.session_state.raw_source_data}
+                    ГОТОВЫЙ ТЕКСТ: {st.session_state.current_text}
+                    """
+                    with st.spinner('Сверяю данные...'):
+                        fact_response = client.chat.completions.create(
+                            model="gpt-4o", 
+                            messages=[{"role": "user", "content": fact_prompt}],
+                            temperature=0.1
                         )
-                        st.write(response.choices[0].message.content)
-                    except Exception as e:
-                        st.error(f"Произошла ошибка: {e}")
+                        st.success("Проверка завершена!")
+                        st.write(fact_response.choices[0].message.content)
+            else:
+                st.info("Сначала сгенерируйте текст.")
