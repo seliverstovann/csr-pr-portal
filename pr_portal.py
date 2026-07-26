@@ -19,6 +19,9 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "raw_source_data" not in st.session_state:
     st.session_state.raw_source_data = ""
+# НОВАЯ ПЕРЕМЕННАЯ ДЛЯ ИСТОРИИ
+if "versions_history" not in st.session_state:
+    st.session_state.versions_history = []
 
 # Вспомогательные функции
 def extract_text_from_file(uploaded_file):
@@ -99,18 +102,20 @@ with left_column:
                 response = client.chat.completions.create(model="gpt-4o", messages=st.session_state.chat_history, temperature=0.4)
                 st.session_state.current_text = response.choices[0].message.content
                 st.session_state.chat_history.append({"role": "assistant", "content": st.session_state.current_text})
+                
+                # СОХРАНЯЕМ В ИСТОРИЮ
+                st.session_state.versions_history.append(st.session_state.current_text)
 
 with right_column:
     st.subheader("Результат")
     with st.container(border=True):
-        text_tab, fact_tab = st.tabs(["Готовый текст", "Проверка фактов и цифр"])
+        # ДОБАВЛЕНА НОВАЯ ВКЛАДКА
+        text_tab, fact_tab, history_tab = st.tabs(["Готовый текст", "Проверка фактов", "История версий"])
         
         with text_tab:
             if st.session_state.current_text:
-                # Используем блок кода для удобного копирования в 1 клик (иконка в правом верхнем углу блока)
                 st.code(st.session_state.current_text, language="markdown")
                 
-                # Кнопка скачивания Word
                 docx_data = create_docx(st.session_state.current_text)
                 st.download_button(label="📥 Скачать в формате Word (.docx)", data=docx_data, file_name="post.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
                 
@@ -123,7 +128,10 @@ with right_column:
                         response = client.chat.completions.create(model="gpt-4o", messages=st.session_state.chat_history, temperature=0.3)
                         st.session_state.current_text = response.choices[0].message.content
                         st.session_state.chat_history.append({"role": "assistant", "content": st.session_state.current_text})
-                        st.rerun() # Перезагружаем интерфейс для отображения нового текста
+                        
+                        # СОХРАНЯЕМ НОВУЮ ВЕРСИЮ В ИСТОРИЮ
+                        st.session_state.versions_history.append(st.session_state.current_text)
+                        st.rerun() 
             else:
                 st.info("👈 Заполните данные слева и нажмите «Сформировать материал»")
 
@@ -150,3 +158,14 @@ with right_column:
                         st.write(fact_response.choices[0].message.content)
             else:
                 st.info("Сначала сгенерируйте текст.")
+                
+        # ЛОГИКА ВКЛАДКИ ИСТОРИИ
+        with history_tab:
+            if not st.session_state.versions_history:
+                st.write("Здесь будут сохраняться все версии текстов (от первой генерации до последних правок).")
+            else:
+                # Показываем от новых к старым
+                for i, past_text in enumerate(reversed(st.session_state.versions_history)):
+                    version_number = len(st.session_state.versions_history) - i
+                    st.markdown(f"**Версия {version_number}**")
+                    st.info(past_text)
