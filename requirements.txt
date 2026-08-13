@@ -5,3 +5,5 @@ python-pptx
 python-docx
 pandas
 openpyxl
+beautifulsoup4
+lxml
