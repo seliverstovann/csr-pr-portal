@@ -31,156 +31,191 @@ from pptx import Presentation
 
 CSR_THEME_CSS = """
 <style>
+/* ============================================================
+   ФИРМЕННАЯ СВЕТЛАЯ ТЕМА ЦСР
+   Палитра снята напрямую с инфографики «Цифры и факты»:
+   фон #B6B3FA, глубокий синий #221AC8, стеклянные плашки
+   #C2BEFA с белой окантовкой.
+   ============================================================ */
 :root {
-    --csr-dark: #1a1626;
-    --csr-darker: #0f0b15;
-    --csr-purple-deep: #353364;
-    --csr-purple-primary: #5F5995;
-    --csr-purple-light: #A6A8CE;
-    --csr-lavender: #c9c7e0;
-    --csr-accent: #9b7ff5;
+    --csr-bg-top:    #C6C3FC;
+    --csr-bg-bottom: #ADAAFA;
+    --csr-ink:       #221AC8;   /* заголовки и цифры */
+    --csr-ink-soft:  #33308F;   /* основной текст */
+    --csr-ink-mute:  #5B57A8;   /* подписи */
+    --csr-glass:     rgba(255, 255, 255, 0.42);
+    --csr-glass-2:   rgba(255, 255, 255, 0.62);
+    --csr-edge:      rgba(255, 255, 255, 0.90);
 }
 
 * { box-sizing: border-box; }
 
-body {
-    background: linear-gradient(135deg, #1a1626 0%, #2a2540 100%);
-    color: #e8e6f0;
+.stApp {
+    background: linear-gradient(160deg, var(--csr-bg-top) 0%, var(--csr-bg-bottom) 100%);
+    background-attachment: fixed;
 }
 
-.glassmorphic-container {
-    background: rgba(90, 85, 160, 0.08);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(166, 168, 206, 0.15);
-    border-radius: 16px;
-    padding: 24px;
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+html, body, [data-testid="stAppViewContainer"] {
+    color: var(--csr-ink-soft);
 }
 
-.metric-card {
-    background: rgba(90, 85, 160, 0.1);
-    border: 1px solid rgba(166, 168, 206, 0.2);
-    border-radius: 14px;
-    padding: 20px;
-    text-align: center;
-    transition: all 0.3s ease;
-}
-
-.metric-card:hover {
-    background: rgba(90, 85, 160, 0.15);
-    border-color: rgba(166, 168, 206, 0.3);
-    box-shadow: 0 6px 20px rgba(95, 89, 149, 0.15);
-    transform: translateY(-2px);
-}
-
-.metric-value {
-    font-size: 2.2rem;
-    font-weight: 700;
-    color: #5F5995;
-    margin: 10px 0;
-}
-
-.metric-label {
-    font-size: 0.9rem;
-    color: #a8aac8;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-[data-testid="stContainer"] { background: transparent; }
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, rgba(53, 51, 100, 0.4) 0%, rgba(42, 37, 64, 0.4) 100%);
-    backdrop-filter: blur(12px);
-    border-right: 1px solid rgba(166, 168, 206, 0.1);
-}
-
+/* --- Заголовки: плотные, в глубоком синем --- */
 h1, h2, h3, h4, h5, h6 {
-    color: #e8e6f0;
+    color: var(--csr-ink) !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+}
+h1 { font-size: 2.1rem !important; text-transform: uppercase; }
+h2 { font-size: 1.35rem !important; }
+h3 { font-size: 1.1rem !important; }
+
+/* --- Боковая панель: матовое стекло --- */
+[data-testid="stSidebar"] {
+    background: rgba(255, 255, 255, 0.34);
+    backdrop-filter: blur(18px);
+    border-right: 1px solid var(--csr-edge);
+}
+[data-testid="stSidebar"] * { color: var(--csr-ink-soft); }
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] .stMarkdown p { color: var(--csr-ink-soft) !important; }
+
+/* --- Стеклянные карточки-контейнеры, как плашки на инфографике --- */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background: var(--csr-glass);
+    backdrop-filter: blur(14px);
+    border: 1.5px solid var(--csr-edge) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 8px 28px rgba(34, 26, 200, 0.10);
+}
+
+/* --- Плашка с цифрой: главный мотив макета --- */
+.metric-card {
+    background: var(--csr-glass-2);
+    border: 1.5px solid var(--csr-edge);
+    border-radius: 16px;
+    padding: 22px 16px;
+    text-align: center;
+    box-shadow: 0 6px 20px rgba(34, 26, 200, 0.10);
+    transition: transform .25s ease, box-shadow .25s ease;
+}
+.metric-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px rgba(34, 26, 200, 0.18);
+}
+.metric-value {
+    font-size: 2.6rem;
+    font-weight: 800;
+    color: var(--csr-ink);
+    line-height: 1.1;
+    margin: 8px 0 2px;
+}
+.metric-label {
+    font-size: 0.72rem;
     font-weight: 600;
-    letter-spacing: -0.5px;
+    color: var(--csr-ink-mute);
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
 }
 
-h1 {
-    font-size: 2.2rem;
-    background: linear-gradient(135deg, #e8e6f0 0%, #c9c7e0 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
+/* --- Кнопки --- */
 button[kind="primary"] {
-    background: linear-gradient(135deg, #5F5995 0%, #353364 100%) !important;
-    color: #e8e6f0 !important;
+    background: var(--csr-ink) !important;
+    color: #FFFFFF !important;
     border: none !important;
-    border-radius: 10px !important;
-    padding: 12px 24px !important;
-    font-weight: 600 !important;
-    box-shadow: 0 4px 15px rgba(95, 89, 149, 0.3) !important;
+    border-radius: 12px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.01em !important;
+    box-shadow: 0 6px 18px rgba(34, 26, 200, 0.30) !important;
+    transition: transform .2s ease, box-shadow .2s ease !important;
 }
-
 button[kind="primary"]:hover {
-    box-shadow: 0 6px 25px rgba(95, 89, 149, 0.5) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 10px 26px rgba(34, 26, 200, 0.40) !important;
+}
+button[kind="secondary"], button[kind="tertiary"] {
+    background: var(--csr-glass-2) !important;
+    color: var(--csr-ink) !important;
+    border: 1.5px solid var(--csr-edge) !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+}
+button[kind="secondary"]:hover, button[kind="tertiary"]:hover {
+    background: rgba(255, 255, 255, 0.85) !important;
 }
 
-input, textarea, select {
-    background: rgba(53, 51, 100, 0.2) !important;
-    color: #e8e6f0 !important;
-    border: 1px solid rgba(166, 168, 206, 0.2) !important;
-    border-radius: 10px !important;
+/* --- Поля ввода --- */
+input, textarea, select,
+[data-baseweb="input"], [data-baseweb="textarea"], [data-baseweb="select"] > div {
+    background: rgba(255, 255, 255, 0.70) !important;
+    color: var(--csr-ink-soft) !important;
+    border: 1.5px solid var(--csr-edge) !important;
+    border-radius: 12px !important;
 }
-
-input:focus, textarea:focus, select:focus {
-    border-color: rgba(95, 89, 149, 0.6) !important;
-    box-shadow: 0 0 0 3px rgba(95, 89, 149, 0.1) !important;
+input:focus, textarea:focus {
+    border-color: var(--csr-ink) !important;
+    box-shadow: 0 0 0 3px rgba(34, 26, 200, 0.14) !important;
 }
+input::placeholder, textarea::placeholder { color: #8A87C4 !important; }
 
+/* --- Вкладки --- */
+[role="tablist"] { border-bottom: 1.5px solid var(--csr-edge); gap: 4px; }
 [role="tab"] {
-    color: #a8aac8;
-    font-weight: 500;
-    transition: all 0.3s ease;
+    color: var(--csr-ink-mute) !important;
+    font-weight: 600 !important;
+    border-radius: 10px 10px 0 0;
+}
+[role="tab"]:hover { background: rgba(255, 255, 255, 0.45); }
+[role="tab"][aria-selected="true"] {
+    color: var(--csr-ink) !important;
+    background: rgba(255, 255, 255, 0.62);
+    border-bottom: 2px solid var(--csr-ink) !important;
 }
 
-[role="tab"]:hover { color: #e8e6f0; }
-[role="tab"][aria-selected="true"] { color: #5F5995 !important; }
-
+/* --- Сообщения --- */
 [data-testid="stAlert"] {
-    background: rgba(95, 89, 149, 0.1) !important;
-    border: 1px solid rgba(95, 89, 149, 0.3) !important;
+    background: rgba(255, 255, 255, 0.62) !important;
+    border: 1.5px solid var(--csr-edge) !important;
+    border-radius: 14px !important;
+    color: var(--csr-ink-soft) !important;
 }
 
-code {
-    background: rgba(53, 51, 100, 0.3) !important;
-    color: #c9c7e0 !important;
-    border-radius: 6px !important;
+/* --- Блок готового текста --- */
+[data-testid="stCodeBlock"], pre {
+    background: rgba(255, 255, 255, 0.72) !important;
+    border: 1.5px solid var(--csr-edge) !important;
+    border-radius: 14px !important;
 }
-
-[data-testid="stCodeBlock"] {
-    background: rgba(53, 51, 100, 0.2) !important;
-    border: 1px solid rgba(166, 168, 206, 0.15) !important;
-}
-
-[data-testid="stExpander"] {
+[data-testid="stCodeBlock"] code, pre code, code {
+    color: var(--csr-ink-soft) !important;
     background: transparent !important;
-    border: 1px solid rgba(166, 168, 206, 0.15) !important;
-    border-radius: 10px !important;
+    font-size: 0.93rem !important;
 }
 
-a { color: #9b7ff5 !important; text-decoration: none !important; }
-a:hover { color: #b399ff !important; }
+/* --- Раскрывающиеся блоки --- */
+[data-testid="stExpander"] {
+    background: rgba(255, 255, 255, 0.42) !important;
+    border: 1.5px solid var(--csr-edge) !important;
+    border-radius: 14px !important;
+}
+[data-testid="stExpander"] summary { color: var(--csr-ink) !important; font-weight: 700 !important; }
 
+/* --- Зона загрузки файлов --- */
+[data-testid="stFileUploaderDropzone"] {
+    background: rgba(255, 255, 255, 0.42) !important;
+    border: 2px dashed rgba(34, 26, 200, 0.32) !important;
+    border-radius: 16px !important;
+}
+
+/* --- Мелочи --- */
+a { color: var(--csr-ink) !important; font-weight: 600; text-decoration: none !important; }
+a:hover { text-decoration: underline !important; }
 hr {
-    border: none !important;
-    height: 1px !important;
-    background: linear-gradient(90deg, transparent, rgba(166, 168, 206, 0.2), transparent) !important;
+    border: none !important; height: 1.5px !important;
+    background: linear-gradient(90deg, transparent, var(--csr-edge), transparent) !important;
 }
-
-[data-testid="stMarkdownContainer"] p {
-    color: #d8d6ea !important;
-    line-height: 1.6 !important;
-}
-
-.stCaption { color: #a8aac8 !important; }
-
+[data-testid="stMarkdownContainer"] p { color: var(--csr-ink-soft) !important; line-height: 1.6 !important; }
+[data-testid="stCaptionContainer"], .stCaption, small { color: var(--csr-ink-mute) !important; }
+[data-testid="stMetricValue"] { color: var(--csr-ink) !important; font-weight: 800 !important; }
 footer { visibility: hidden; }
 </style>
 """

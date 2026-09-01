@@ -1,14 +1,14 @@
 [theme]
 base = "light"
-primaryColor = "#5E5B94"
-backgroundColor = "#F8F8FC"
-secondaryBackgroundColor = "#EEEEF6"
-textColor = "#28263F"
+primaryColor = "#221AC8"
+backgroundColor = "#BEBBFB"
+secondaryBackgroundColor = "#D3D1FC"
+textColor = "#33308F"
+font = "sans serif"
 
-font = "sans-serif"
+[client]
+showErrorDetails = false
+toolbarMode = "minimal"
 
-[theme.sidebar]
-backgroundColor = "#353364"
-secondaryBackgroundColor = "#454374"
-textColor = "#FFFFFF"
-primaryColor = "#D66BA5"
+[logger]
+level = "warning"
