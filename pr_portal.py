@@ -1,8 +1,21 @@
+"""
+ЦСР PR-ПОРТАЛ 3.0
+Премиальный AI-ассистент для пресс-службы ЦСР
+- Генерация постов с GPT-4o
+- Мониторинг новостей (News API + Google RSS)
+- Интеграция с Яндекс.Диском
+- Аналитика и метрики
+- История постов
+"""
+
 import json
 import os
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+import requests
+import feedparser
+import urllib.parse
 
 import docx
 import pandas as pd
@@ -13,21 +26,192 @@ from openai import OpenAI
 from pptx import Presentation
 
 # ============================================================
-# НАСТРОЙКИ
+# ФИРМЕННАЯ ТЕМА ЦСР
 # ============================================================
-st.set_page_config(page_title="ЦСР PR-портал", page_icon="⚡️", layout="wide", initial_sidebar_state="expanded")
+
+CSR_THEME_CSS = """
+<style>
+:root {
+    --csr-dark: #1a1626;
+    --csr-darker: #0f0b15;
+    --csr-purple-deep: #353364;
+    --csr-purple-primary: #5F5995;
+    --csr-purple-light: #A6A8CE;
+    --csr-lavender: #c9c7e0;
+    --csr-accent: #9b7ff5;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    background: linear-gradient(135deg, #1a1626 0%, #2a2540 100%);
+    color: #e8e6f0;
+}
+
+.glassmorphic-container {
+    background: rgba(90, 85, 160, 0.08);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(166, 168, 206, 0.15);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+}
+
+.metric-card {
+    background: rgba(90, 85, 160, 0.1);
+    border: 1px solid rgba(166, 168, 206, 0.2);
+    border-radius: 14px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+    background: rgba(90, 85, 160, 0.15);
+    border-color: rgba(166, 168, 206, 0.3);
+    box-shadow: 0 6px 20px rgba(95, 89, 149, 0.15);
+    transform: translateY(-2px);
+}
+
+.metric-value {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #5F5995;
+    margin: 10px 0;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    color: #a8aac8;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+[data-testid="stContainer"] { background: transparent; }
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, rgba(53, 51, 100, 0.4) 0%, rgba(42, 37, 64, 0.4) 100%);
+    backdrop-filter: blur(12px);
+    border-right: 1px solid rgba(166, 168, 206, 0.1);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: #e8e6f0;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+}
+
+h1 {
+    font-size: 2.2rem;
+    background: linear-gradient(135deg, #e8e6f0 0%, #c9c7e0 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+button[kind="primary"] {
+    background: linear-gradient(135deg, #5F5995 0%, #353364 100%) !important;
+    color: #e8e6f0 !important;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 12px 24px !important;
+    font-weight: 600 !important;
+    box-shadow: 0 4px 15px rgba(95, 89, 149, 0.3) !important;
+}
+
+button[kind="primary"]:hover {
+    box-shadow: 0 6px 25px rgba(95, 89, 149, 0.5) !important;
+}
+
+input, textarea, select {
+    background: rgba(53, 51, 100, 0.2) !important;
+    color: #e8e6f0 !important;
+    border: 1px solid rgba(166, 168, 206, 0.2) !important;
+    border-radius: 10px !important;
+}
+
+input:focus, textarea:focus, select:focus {
+    border-color: rgba(95, 89, 149, 0.6) !important;
+    box-shadow: 0 0 0 3px rgba(95, 89, 149, 0.1) !important;
+}
+
+[role="tab"] {
+    color: #a8aac8;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+[role="tab"]:hover { color: #e8e6f0; }
+[role="tab"][aria-selected="true"] { color: #5F5995 !important; }
+
+[data-testid="stAlert"] {
+    background: rgba(95, 89, 149, 0.1) !important;
+    border: 1px solid rgba(95, 89, 149, 0.3) !important;
+}
+
+code {
+    background: rgba(53, 51, 100, 0.3) !important;
+    color: #c9c7e0 !important;
+    border-radius: 6px !important;
+}
+
+[data-testid="stCodeBlock"] {
+    background: rgba(53, 51, 100, 0.2) !important;
+    border: 1px solid rgba(166, 168, 206, 0.15) !important;
+}
+
+[data-testid="stExpander"] {
+    background: transparent !important;
+    border: 1px solid rgba(166, 168, 206, 0.15) !important;
+    border-radius: 10px !important;
+}
+
+a { color: #9b7ff5 !important; text-decoration: none !important; }
+a:hover { color: #b399ff !important; }
+
+hr {
+    border: none !important;
+    height: 1px !important;
+    background: linear-gradient(90deg, transparent, rgba(166, 168, 206, 0.2), transparent) !important;
+}
+
+[data-testid="stMarkdownContainer"] p {
+    color: #d8d6ea !important;
+    line-height: 1.6 !important;
+}
+
+.stCaption { color: #a8aac8 !important; }
+
+footer { visibility: hidden; }
+</style>
+"""
+
+# ============================================================
+# КОНФИГ
+# ============================================================
+st.set_page_config(
+    page_title="ЦСР PR-портал 3.0", 
+    page_icon="⚡️", 
+    layout="wide", 
+    initial_sidebar_state="expanded"
+)
+
+st.markdown(CSR_THEME_CSS, unsafe_allow_html=True)
 
 MODEL = "gpt-4o"
 TEMP_GENERATE = 0.4
 TEMP_REFINE = 0.3
 TEMP_FACTCHECK = 0.1
 
-STYLE_LIBRARY_FILE = "style_library.json"   # хранится на диске приложения
-MAX_STYLE_EXAMPLES_IN_PROMPT = 5            # сколько примеров максимум уходит в промпт
-MAX_CHARS_PER_EXAMPLE = 1200                # обрезаем длинные примеры, чтобы не раздувать промпт
-HISTORY_KEEP_LAST = 6                       # сколько последних сообщений диалога отправляем при уточнении
+STYLE_LIBRARY_FILE = "style_library.json"
+MAX_STYLE_EXAMPLES_IN_PROMPT = 5
+MAX_CHARS_PER_EXAMPLE = 1200
+HISTORY_KEEP_LAST = 6
 
-# Поля формы под каждый формат поста
+# Путь к папке базы знаний на Яндекс.Диске.
+# Если папка называется иначе — поменяйте здесь одну строку.
+# Точное имя можно посмотреть в разделе «📁» (кнопка «Показать корень диска»).
+YANDEX_BASE_PATH = "/ЦСР - база знаний"
+
 CATEGORY_FIELDS = {
     "1. Анонс мероприятия": [
         {"label": "Дата мероприятия", "key": "date", "area": False},
@@ -82,13 +266,11 @@ CATEGORY_FIELDS = {
 }
 
 # ============================================================
-# (ОПЦИОНАЛЬНАЯ) ЗАЩИТА ПАРОЛЕМ
-# Если в secrets.toml задан APP_PASSWORD — попросим ввести пароль.
-# Если секрет не задан, приложение работает без защиты, как раньше.
+# СЕКРЕТЫ И КЛЮЧИ
 # ============================================================
 try:
     APP_PASSWORD = st.secrets.get("APP_PASSWORD")
-except Exception:
+except:
     APP_PASSWORD = None
 
 if APP_PASSWORD:
@@ -102,36 +284,436 @@ if APP_PASSWORD:
                 st.session_state.authenticated = True
                 st.rerun()
             else:
-                st.error("Неверный пароль")
+                st.error("❌ Неверный пароль")
         st.stop()
 
 try:
     API_KEY = st.secrets["OPENAI_API_KEY"]
-except Exception:
-    st.error("Не найден OPENAI_API_KEY в secrets. Добавьте его в настройках приложения.")
+except:
+    st.error("⚠️ Не найден OPENAI_API_KEY в secrets.")
     st.stop()
+
+try:
+    YANDEX_TOKEN = st.secrets.get("YANDEX_DISK_TOKEN")
+except:
+    YANDEX_TOKEN = None
+
+try:
+    NEWS_API_KEY = st.secrets.get("NEWS_API_KEY")
+except:
+    NEWS_API_KEY = None
 
 client = OpenAI(api_key=API_KEY)
 
 # ============================================================
-# ИНИЦИАЛИЗАЦИЯ SESSION STATE
+# ЯНДЕКС.ДИСК API
 # ============================================================
-defaults = {
-    "current_text": "",
-    "chat_history": [],
-    "raw_source_data": "",
-    "versions_history": [],   # список dict: {"text": ..., "label": ...}
-}
-for key, value in defaults.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
+class YandexDiskAPI:
+    def __init__(self, token):
+        self.token = token
+        self.headers = {"Authorization": f"OAuth {token}"}
+        self.base_url = "https://cloud-api.yandex.net/v1/disk"
+    
+    def list_files(self, path="/"):
+        url = f"{self.base_url}/resources"
+        params = {"path": path, "limit": 100}
+        try:
+            response = requests.get(url, headers=self.headers, params=params, timeout=10)
+            if response.status_code == 200:
+                items = response.json().get("_embedded", {}).get("items", [])
+                return sorted(items, key=lambda x: x.get("name", ""))
+            return []
+        except:
+            return []
+    
+    def get_download_url(self, path):
+        url = f"{self.base_url}/resources/download"
+        params = {"path": path}
+        try:
+            response = requests.get(url, headers=self.headers, params=params, timeout=10)
+            if response.status_code == 200:
+                return response.json().get("href")
+        except:
+            pass
+        return None
+    
+    def download_file(self, path):
+        download_url = self.get_download_url(path)
+        if download_url:
+            try:
+                response = requests.get(download_url, timeout=10)
+                if response.status_code == 200:
+                    return response.content
+            except:
+                pass
+        return None
+
+disk_api = None
+if YANDEX_TOKEN:
+    disk_api = YandexDiskAPI(YANDEX_TOKEN)
+
 
 # ============================================================
-# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ПОСТОЯННОЕ ХРАНИЛИЩЕ (Яндекс.Диск)
+# ------------------------------------------------------------
+# Файловая система Streamlit Cloud временная: при перезапуске
+# приложения всё, что лежит рядом с кодом, стирается. Поэтому
+# история постов, избранные новости и библиотека стилей хранятся
+# в JSON-файлах на Яндекс.Диске, а локально держится только кэш.
+# ============================================================
+
+# Папка для служебных данных приложения. Создаётся автоматически.
+APP_DATA_PATH = "/PR-портал ЦСР — данные"
+
+
+class YandexStorage:
+    def __init__(self, token, folder=APP_DATA_PATH):
+        self.token = token
+        self.folder = folder
+        self.headers = {"Authorization": f"OAuth {token}"}
+        self.base_url = "https://cloud-api.yandex.net/v1/disk"
+        self.writable = None      # None = ещё не проверяли
+        self.last_error = ""
+
+    def _ensure_folder(self):
+        """Создаёт папку приложения. 409 = уже существует, это норма."""
+        try:
+            r = requests.put(
+                f"{self.base_url}/resources",
+                headers=self.headers,
+                params={"path": self.folder},
+                timeout=10,
+            )
+            return r.status_code in (201, 409)
+        except Exception as e:
+            self.last_error = str(e)
+            return False
+
+    def load(self, name, default):
+        """Читает JSON с Диска. При любой проблеме возвращает default."""
+        if not self.token:
+            return default
+        try:
+            r = requests.get(
+                f"{self.base_url}/resources/download",
+                headers=self.headers,
+                params={"path": f"{self.folder}/{name}"},
+                timeout=10,
+            )
+            if r.status_code != 200:
+                return default          # файла ещё нет — первый запуск
+            href = r.json().get("href")
+            data = requests.get(href, timeout=15)
+            if data.status_code != 200:
+                return default
+            return json.loads(data.content.decode("utf-8"))
+        except Exception as e:
+            self.last_error = str(e)
+            return default
+
+    def save(self, name, data):
+        """Записывает JSON на Диск. Возвращает True при успехе."""
+        if not self.token:
+            self.writable = False
+            return False
+        try:
+            self._ensure_folder()
+            r = requests.get(
+                f"{self.base_url}/resources/upload",
+                headers=self.headers,
+                params={"path": f"{self.folder}/{name}", "overwrite": "true"},
+                timeout=10,
+            )
+            if r.status_code != 200:
+                self.writable = False
+                self.last_error = (
+                    f"{r.status_code}: {r.json().get('message', '')}"
+                )
+                return False
+            href = r.json().get("href")
+            payload = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+            up = requests.put(href, data=payload, timeout=30)
+            ok = up.status_code in (201, 202)
+            self.writable = ok
+            return ok
+        except Exception as e:
+            self.writable = False
+            self.last_error = str(e)
+            return False
+
+
+storage = YandexStorage(YANDEX_TOKEN) if YANDEX_TOKEN else None
+
+
+def storage_load(name, default):
+    """Читает данные: с Диска, если он подключён, иначе из локального файла."""
+    if storage:
+        return storage.load(name, default)
+    if os.path.exists(name):
+        try:
+            with open(name, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return default
+    return default
+
+
+def storage_save(name, data):
+    """Пишет данные на Диск и одновременно в локальный файл (быстрый кэш)."""
+    try:
+        with open(name, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    if storage:
+        return storage.save(name, data)
+    return False
+
+# ============================================================
+# МОНИТОРИНГ НОВОСТЕЙ
+# ============================================================
+class NewsMonitor:
+    def __init__(self, news_api_key=None):
+        self.news_api_key = news_api_key
+        self.news_api_url = "https://newsapi.org/v2/everything"
+        self.init_db()
+    
+    FAVORITES_FILE = "news_favorites.json"
+
+    def init_db(self):
+        pass  # хранилище файловое, инициализация не нужна
+
+    def save_favorite(self, title, source, url, published, description):
+        items = storage_load(self.FAVORITES_FILE, [])
+        if not isinstance(items, list):
+            items = []
+        if any(i.get("title") == title for i in items):
+            return
+        items.insert(0, {
+            "title": title,
+            "source": source,
+            "url": url,
+            "published": published,
+            "description": description,
+            "saved_at": datetime.now().isoformat(timespec="seconds"),
+        })
+        storage_save(self.FAVORITES_FILE, items)
+
+    def get_favorites(self):
+        items = storage_load(self.FAVORITES_FILE, [])
+        if not isinstance(items, list):
+            return []
+        return [
+            (i.get("title", ""), i.get("source", ""), i.get("url", ""),
+             i.get("published", ""), i.get("description", ""))
+            for i in items
+        ]
+
+    def delete_favorite(self, title):
+        items = storage_load(self.FAVORITES_FILE, [])
+        if not isinstance(items, list):
+            return
+        items = [i for i in items if i.get("title") != title]
+        storage_save(self.FAVORITES_FILE, items)
+
+    def fetch_news_api(self, query="ЦСР", language="ru", days=7):
+        if not self.news_api_key:
+            return []
+        try:
+            params = {
+                "q": query,
+                "language": language,
+                "sortBy": "publishedAt",
+                "apiKey": self.news_api_key,
+                "pageSize": 25,
+                "from": (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d"),
+            }
+            response = requests.get(self.news_api_url, params=params, timeout=10)
+            if response.status_code != 200:
+                st.warning(
+                    f"News API вернул {response.status_code}: "
+                    f"{response.json().get('message', '')}"
+                )
+                return []
+            if response.status_code == 200:
+                data = response.json()
+                news_list = []
+                for article in data.get('articles', []):
+                    try:
+                        news_list.append({
+                            'title': article.get('title', 'N/A'),
+                            'source': article.get('source', {}).get('name', 'News API'),
+                            'url': article.get('url', ''),
+                            'published': article.get('publishedAt', ''),
+                            'description': article.get('description', ''),
+                            'type': 'news_api'
+                        })
+                    except:
+                        continue
+                return news_list
+            return []
+        except:
+            return []
+    
+    def fetch_google_news(self, query="ЦСР OR \"Центр стратегических разработок\"", days=7):
+        try:
+            # ВАЖНО: запрос обязательно кодируем, иначе пробелы ломают URL
+            q = f"{query} when:{days}d"
+            url = (
+                "https://news.google.com/rss/search?q="
+                + urllib.parse.quote(q)
+                + "&hl=ru&gl=RU&ceid=RU:ru"
+            )
+            feed = feedparser.parse(url)
+            news_list = []
+            for entry in feed.entries[:40]:
+                try:
+                    title = entry.get('title', 'N/A')
+                    link = entry.get('link', '')
+                    published = entry.get('published', '')
+                    summary = entry.get('summary', '')
+                    if summary:
+                        summary = BeautifulSoup(summary, 'html.parser').get_text()[:250]
+                    source = entry.get('source', {}).get('title') if entry.get('source') else None
+                    if not source and ' - ' in title:
+                        title, source = title.rsplit(' - ', 1)
+                    news_list.append({
+                        'title': title.strip(),
+                        'source': (source or 'Google News').strip(),
+                        'url': link,
+                        'published': published,
+                        'description': summary,
+                        'type': 'google_news'
+                    })
+                except Exception:
+                    continue
+            return news_list
+        except Exception as e:
+            st.warning(f"Google News недоступен: {e}")
+            return []
+    
+    def fetch_combined(self, query="ЦСР", use_news_api=True, use_google_news=True, days=7):
+        all_news = []
+        if use_news_api and self.news_api_key:
+            api_news = self.fetch_news_api(query, days=days)
+            all_news.extend(api_news)
+        if use_google_news:
+            google_news = self.fetch_google_news(query, days=days)
+            all_news.extend(google_news)
+        seen_titles = set()
+        unique_news = []
+        for news in all_news:
+            title = news['title']
+            if title not in seen_titles:
+                seen_titles.add(title)
+                unique_news.append(news)
+        return sorted(unique_news, key=lambda x: x.get('published', ''), reverse=True)
+
+news_monitor = NewsMonitor(news_api_key=NEWS_API_KEY)
+
+
+# Кэш на 10 минут: без него новости перезапрашиваются при КАЖДОМ клике
+# в интерфейсе и дневная квота News API (100 запросов) сгорает за пару минут.
+@st.cache_data(ttl=600, show_spinner=False)
+def cached_fetch_news(query, use_api, use_google, days, _cache_buster=0):
+    return news_monitor.fetch_combined(
+        query, use_news_api=use_api, use_google_news=use_google, days=days
+    )
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cached_list_disk(path, _cache_buster=0):
+    if not disk_api:
+        return []
+    return disk_api.list_files(path)
+
+# ============================================================
+# ИСТОРИЯ ПОСТОВ (хранится на Яндекс.Диске)
+# ============================================================
+POSTS_FILE = "posts_history.json"
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_posts(_buster=0):
+    data = storage_load(POSTS_FILE, [])
+    return data if isinstance(data, list) else []
+
+
+def _bump_posts_cache():
+    st.session_state.posts_buster = st.session_state.get("posts_buster", 0) + 1
+
+
+def save_post(category, tone, length, text, raw_source, has_citations=0):
+    """Дописывает пост в общий журнал. Перед записью перечитывает файл,
+    чтобы не затереть посты, добавленные коллегой с другого компьютера."""
+    posts = storage_load(POSTS_FILE, [])
+    if not isinstance(posts, list):
+        posts = []
+    post_id = str(uuid.uuid4())
+    posts.append({
+        "id": post_id,
+        "category": category,
+        "tone": tone,
+        "length": length,
+        "text": text,
+        "raw_source": raw_source[:4000],
+        "has_citations": int(has_citations),
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+    })
+    storage_save(POSTS_FILE, posts)
+    _bump_posts_cache()
+    return post_id
+
+
+def get_posts_history(limit=100):
+    posts = _load_posts(st.session_state.get("posts_buster", 0))
+    posts = sorted(posts, key=lambda p: p.get("created_at", ""), reverse=True)
+    return [
+        (p.get("id"), p.get("category"), p.get("tone"),
+         p.get("text", ""), p.get("created_at", ""), p.get("has_citations", 0))
+        for p in posts[:limit]
+    ]
+
+
+def get_metrics():
+    posts = _load_posts(st.session_state.get("posts_buster", 0))
+    now = datetime.now()
+
+    def parse(p):
+        try:
+            return datetime.fromisoformat(p.get("created_at", ""))
+        except Exception:
+            return None
+
+    week_ago = now - timedelta(days=7)
+    month_ago = now - timedelta(days=30)
+    dates = [d for d in (parse(p) for p in posts) if d]
+
+    def group(field):
+        counts = {}
+        for p in posts:
+            key = p.get(field) or "—"
+            counts[key] = counts.get(key, 0) + 1
+        return sorted(counts.items(), key=lambda x: x[1], reverse=True)
+
+    with_citations = sum(1 for p in posts if p.get("has_citations"))
+
+    return {
+        "total_posts": len(posts),
+        "posts_week": sum(1 for d in dates if d > week_ago),
+        "posts_month": sum(1 for d in dates if d > month_ago),
+        "by_category": group("category"),
+        "by_tone": group("tone"),
+        "by_length": group("length"),
+        "with_citations": with_citations,
+        "without_citations": len(posts) - with_citations,
+    }
+
+# ============================================================
+# ФУНКЦИИ
 # ============================================================
 
 def extract_text_from_file(uploaded_file):
-    """Извлекает текст из одного файла (pdf, pptx, docx, xlsx, txt, html-экспорт Telegram)."""
     name = uploaded_file.name.lower()
     text = ""
     try:
@@ -158,43 +740,59 @@ def extract_text_from_file(uploaded_file):
                 text += df.to_string(index=False) + "\n\n"
         elif name.endswith(".txt"):
             text = uploaded_file.read().decode("utf-8", errors="ignore")
-        elif name.endswith(".html") or name.endswith(".htm"):
-            # экспорт переписки Telegram и подобные HTML-файлы
-            messages = extract_telegram_messages(uploaded_file.read())
-            text = "\n\n---\n\n".join(messages)
-        else:
-            st.warning(f"Формат файла «{uploaded_file.name}» не поддерживается и был пропущен.")
-    except Exception as e:
-        st.warning(f"Не удалось прочитать файл «{uploaded_file.name}»: {e}")
+    except:
+        pass
     return text
 
-
 def extract_text_from_files(uploaded_files):
-    """Извлекает и объединяет текст из списка файлов."""
     if not uploaded_files:
         return ""
     chunks = []
     for f in uploaded_files:
         t = extract_text_from_file(f)
         if t.strip():
-            chunks.append(f"### Файл: {f.name}\n{t}")
+            chunks.append(f"### {f.name}\n{t}")
     return "\n\n".join(chunks)
 
-
-def extract_telegram_messages(html_bytes):
-    """Парсит HTML-экспорт Telegram и возвращает список текстов отдельных сообщений."""
-    soup = BeautifulSoup(html_bytes, "html.parser")
-    messages = []
-    for div in soup.find_all("div", class_="text"):
-        t = div.get_text(separator="\n").strip()
-        t = re.sub(r"\n{3,}", "\n\n", t)
-        if len(t) > 30:  # отсекаем служебные короткие блоки (имена, даты и т.п.)
-            messages.append(t)
-    return messages
-
+def extract_yandex_file(disk_api, file_path):
+    content = disk_api.download_file(file_path)
+    if not content:
+        return ""
+    name = file_path.lower()
+    text = ""
+    try:
+        if name.endswith(".pdf"):
+            from io import BytesIO
+            reader = PyPDF2.PdfReader(BytesIO(content))
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+        elif name.endswith(".docx"):
+            from io import BytesIO
+            doc = docx.Document(BytesIO(content))
+            for para in doc.paragraphs:
+                text += para.text + "\n"
+        elif name.endswith(".txt"):
+            text = content.decode("utf-8", errors="ignore")
+        elif name.endswith(".xlsx"):
+            from io import BytesIO
+            xls = pd.read_excel(BytesIO(content), sheet_name=None)
+            for sheet_name, df in xls.items():
+                text += f"--- Лист: {sheet_name} ---\n"
+                text += df.to_string(index=False) + "\n\n"
+        elif name.endswith(".pptx"):
+            from io import BytesIO
+            prs = Presentation(BytesIO(content))
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text:
+                        text += shape.text + "\n"
+    except Exception as e:
+        st.warning(f"Не удалось прочитать {file_path}: {e}")
+    return text
 
 def create_docx(text):
-    """Создаёт .docx, поддерживая **жирный** markdown-синтаксис построчно."""
     doc = docx.Document()
     for line in text.split("\n"):
         if line.strip() == "":
@@ -212,39 +810,30 @@ def create_docx(text):
     doc.save(bio)
     return bio.getvalue()
 
-
 def call_openai(messages, temperature):
-    """Обёртка над вызовом OpenAI API с обработкой ошибок."""
     try:
-        response = client.chat.completions.create(model=MODEL, messages=messages, temperature=temperature)
+        response = client.chat.completions.create(
+            model=MODEL, 
+            messages=messages, 
+            temperature=temperature
+        )
         return response.choices[0].message.content
     except Exception as e:
-        st.error(f"Ошибка обращения к OpenAI API: {e}")
+        st.error(f"❌ Ошибка OpenAI: {e}")
         return None
 
-
 def trim_history(history):
-    """Ограничивает историю диалога: системный промпт + первый запрос + последние N сообщений."""
     if len(history) <= HISTORY_KEEP_LAST + 2:
         return history
     return history[:2] + history[-HISTORY_KEEP_LAST:]
 
-
-# --- Библиотека эталонных примеров стиля ---
-
 def load_style_library():
-    if os.path.exists(STYLE_LIBRARY_FILE):
-        try:
-            with open(STYLE_LIBRARY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    lib = storage_load(STYLE_LIBRARY_FILE, [])
+    return lib if isinstance(lib, list) else []
 
 
 def save_style_library(library):
-    with open(STYLE_LIBRARY_FILE, "w", encoding="utf-8") as f:
-        json.dump(library, f, ensure_ascii=False, indent=2)
+    storage_save(STYLE_LIBRARY_FILE, library)
 
 
 def add_style_examples(texts):
@@ -261,12 +850,10 @@ def add_style_examples(texts):
         })
     save_style_library(library)
 
-
 def delete_style_example(example_id):
     library = load_style_library()
     library = [e for e in library if e["id"] != example_id]
     save_style_library(library)
-
 
 def build_style_block(selected_ids):
     if not selected_ids:
@@ -275,22 +862,45 @@ def build_style_block(selected_ids):
     chosen = [e for e in library if e["id"] in selected_ids][:MAX_STYLE_EXAMPLES_IN_PROMPT]
     if not chosen:
         return ""
-    parts = []
-    for e in chosen:
-        snippet = e["text"][:MAX_CHARS_PER_EXAMPLE]
-        parts.append(snippet)
+    parts = [e["text"][:MAX_CHARS_PER_EXAMPLE] for e in chosen]
     block = "\n\n---\n\n".join(parts)
-    return f"""
-Ниже приведены реальные примеры постов канала — ориентируйся на них как на эталон стиля,
-подачи, длины предложений, использования эмодзи и структуры. Не копируй их содержание,
-используй только как образец стиля:
+    return f"Примеры постов для ориентира:\n\n{block}"
 
-{block}
+def get_enhanced_system_rules(category, tone, text_length, use_citations):
+    citation_rule = "Пересказывай информацию своими словами без цитат" if not use_citations else "Используй цитаты из источников (максимум 2-3 на пост)"
+    
+    return f"""Ты — PR-редактор ЦСР. Основные правила:
+
+🎯 СТИЛЬ:
+• Аналитически и структурированно
+• Заголовок первой строкой **жирным**
+• Логические переходы между абзацами
+• Четкая логика и причинно-следственные связи
+
+📝 КОНТЕНТ:
+• БЕЗ буллитов — только прозаический текст
+• {citation_rule}
+• Конкретные цифры с контекстом
+• Завершающий вывод
+• Язык живой, но серьёзный
+
+🚫 ИЗБЕГАЙ:
+• "и т.д.", "и т.п."
+• Клише типа "как известно"
+• Излишних эмодзи
+• Коротких рубленых предложений
+
+✅ ДЕЛАЙ:
+• Связки: "Это означает...", "Поэтому..."
+• Анализ, а не перечисление
+• Подвал: "⭐️ подписаться на канал"
+
+Рубрика: {category}
+Тон: {tone}
+Объем: {text_length}
 """
 
-
 def build_dynamic_fields(category):
-    """Рисует поля формы под выбранную рубрику и возвращает словарь значений."""
     values = {}
     fields = CATEGORY_FIELDS.get(category, [])
     for field in fields:
@@ -299,7 +909,6 @@ def build_dynamic_fields(category):
         else:
             values[field["key"]] = st.text_input(field["label"], key=f"field_{field['key']}")
     return values
-
 
 def format_fields_as_text(category, values):
     fields = CATEGORY_FIELDS.get(category, [])
@@ -310,222 +919,759 @@ def format_fields_as_text(category, values):
             lines.append(f"{field['label']}: {val}")
     return "\n".join(lines)
 
+# ============================================================
+# SESSION STATE
+# ============================================================
+defaults = {
+    "current_text": "",
+    "chat_history": [],
+    "raw_source_data": "",
+    "versions_history": [],
+}
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
+
+if "show_metrics" not in st.session_state:
+    st.session_state.show_metrics = False
+if "show_yandex" not in st.session_state:
+    st.session_state.show_yandex = False
+if "show_news" not in st.session_state:
+    st.session_state.show_news = False
+if "news_for_post" not in st.session_state:
+    st.session_state.news_for_post = None
 
 # ============================================================
 # БОКОВАЯ ПАНЕЛЬ
 # ============================================================
 with st.sidebar:
-    st.title("ЦСР PR-портал")
-    st.caption("Внутренний ИИ-ассистент пресс-службы")
+    st.title("⚡️ ЦСР PR-портал")
+    st.caption("Премиальный ИИ-ассистент пресс-службы")
+
+    # Видно ли, что данные реально сохраняются
+    if storage is None:
+        st.error(
+            "Хранилище не подключено: история и примеры пропадут "
+            "при перезапуске. Нужен YANDEX_DISK_TOKEN."
+        )
+    elif storage.writable is False:
+        st.error(
+            f"Диск подключён, но запись не проходит ({storage.last_error}). "
+            "Проверьте право записи у токена."
+        )
+    else:
+        st.caption("💾 Данные сохраняются на Яндекс.Диск")
+
     st.divider()
 
-    task = st.selectbox("Выберите задачу:", ["Написать пост для Telegram-канала"])
-    post_category = st.selectbox("Рубрика поста:", list(CATEGORY_FIELDS.keys()))
+    task = st.selectbox("📝 Задача:", ["Написать пост для Telegram-канала"])
+    post_category = st.selectbox("📂 Рубрика:", list(CATEGORY_FIELDS.keys()))
 
     st.divider()
-    st.subheader("Настройки текста")
+    st.subheader("⚙️ Настройки")
     text_length = st.select_slider(
-        "Объем:", options=["Короткий (до 1000 зн.)", "Стандартный", "Развернутый (лонгрид)"], value="Стандартный"
+        "Объем:", 
+        options=["Короткий (до 1000 зн.)", "Стандартный", "Развернутый (лонгрид)"], 
+        value="Стандартный"
     )
     tone = st.selectbox(
         "Тональность:",
-        ["Строгий (сухие факты, официально)", "Корпоративно-информационный (стандарт)", "Живой (вовлекающий, для соцсетей)"],
+        ["Строгий (сухие факты)", "Стандарт (информационный)", "Живой (для соцсетей)"],
     )
+    
+    st.divider()
+    st.subheader("🆕 Опции")
+    use_citations = st.checkbox("💬 Использовать цитаты", value=False)
 
     st.divider()
-    st.subheader("📚 Эталонные примеры стиля")
-    st.caption("Добавьте примеры постов канала — модель будет ориентироваться на них при генерации.")
-
-    with st.expander("Добавить примеры"):
+    st.subheader("📚 Примеры стиля")
+    
+    with st.expander("➕ Добавить примеры"):
         style_files = st.file_uploader(
-            "Файлы с примерами (можно несколько; поддерживается HTML-экспорт Telegram)",
+            "Файлы",
             type=["txt", "pdf", "docx", "html", "htm"],
             accept_multiple_files=True,
             key="style_files_uploader",
         )
         pasted_examples = st.text_area(
-            "Или вставьте текст примеров (разделяйте несколько постов строкой ---)",
+            "Или вставьте текст",
             key="style_paste_area",
+            height=80
         )
-        if st.button("Добавить в библиотеку", use_container_width=True):
+        if st.button("✓ Добавить", use_container_width=True):
             new_texts = []
             for f in style_files or []:
-                name = f.name.lower()
-                if name.endswith((".html", ".htm")):
-                    new_texts.extend(extract_telegram_messages(f.read()))
-                else:
-                    t = extract_text_from_file(f)
-                    if t.strip():
-                        new_texts.append(t)
+                t = extract_text_from_file(f)
+                if t.strip():
+                    new_texts.append(t)
             if pasted_examples.strip():
                 new_texts.extend([chunk.strip() for chunk in pasted_examples.split("\n---\n") if chunk.strip()])
             if new_texts:
                 add_style_examples(new_texts)
-                st.success(f"Добавлено примеров: {len(new_texts)}")
+                st.success(f"✅ Добавлено: {len(new_texts)}")
                 st.rerun()
-            else:
-                st.warning("Не найдено текста для добавления.")
 
     library = load_style_library()
     if library:
-        st.caption(f"В библиотеке: {len(library)} примеров. Выберите, какие использовать при генерации:")
         if "selected_style_ids" not in st.session_state:
-            # по умолчанию берём последние несколько примеров
             st.session_state.selected_style_ids = [e["id"] for e in library[-MAX_STYLE_EXAMPLES_IN_PROMPT:]]
 
-        with st.expander(f"Управление примерами ({len(library)})"):
+        with st.expander(f"🎯 Примеры ({len(library)})"):
             for e in reversed(library):
                 col1, col2 = st.columns([4, 1])
                 with col1:
                     checked = st.checkbox(
-                        e["preview"], value=e["id"] in st.session_state.selected_style_ids, key=f"chk_{e['id']}"
+                        e["preview"][:50], 
+                        value=e["id"] in st.session_state.selected_style_ids, 
+                        key=f"chk_{e['id']}"
                     )
                     if checked and e["id"] not in st.session_state.selected_style_ids:
                         st.session_state.selected_style_ids.append(e["id"])
                     elif not checked and e["id"] in st.session_state.selected_style_ids:
                         st.session_state.selected_style_ids.remove(e["id"])
                 with col2:
-                    if st.button("🗑️", key=f"del_{e['id']}"):
+                    if st.button("🗑️", key=f"del_{e['id']}", use_container_width=True):
                         delete_style_example(e["id"])
                         st.rerun()
-    else:
-        st.caption("Библиотека пуста — добавьте примеры выше.")
-        st.session_state.selected_style_ids = []
 
     st.divider()
-    if st.button("🔄 Начать заново (очистить всё)", use_container_width=True):
-        for key in ["current_text", "chat_history", "raw_source_data", "versions_history"]:
-            st.session_state[key] = defaults[key]
-        st.rerun()
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        if st.button("🔄", help="Заново", use_container_width=True):
+            for key in defaults:
+                st.session_state[key] = defaults[key]
+            st.rerun()
+    with col2:
+        if st.button("📊", help="Метрики", use_container_width=True):
+            st.session_state.show_metrics = True
+    with col3:
+        if st.button("📁", help="Яндекс.Диск", use_container_width=True):
+            st.session_state.show_yandex = True
+    with col4:
+        if st.button("📰", help="Новости", use_container_width=True):
+            st.session_state.show_news = True
 
 # ============================================================
 # ОСНОВНОЙ ЭКРАН
 # ============================================================
-left_column, right_column = st.columns([1.1, 0.9], gap="large")
+if not st.session_state.show_metrics and not st.session_state.show_yandex and not st.session_state.show_news:
+    left_column, right_column = st.columns([1.1, 0.9], gap="large")
 
-with left_column:
-    st.subheader("Исходные данные")
-    with st.container(border=True):
-        st.caption(f"Поля для рубрики «{post_category}»")
-        field_values = build_dynamic_fields(post_category)
+    with left_column:
+        st.subheader("📋 Исходные данные")
+        with st.container(border=True):
+            st.caption(f"Рубрика: {post_category}")
+            field_values = build_dynamic_fields(post_category)
 
-        speaker = st.text_input("Спикер (если не указан в полях выше)", placeholder="Имя, фамилия и должность")
-        materials_text = st.text_area("Дополнительные материалы / тезисы", height=120)
-        uploaded_files = st.file_uploader(
-            "Загрузите файлы (можно несколько): PDF, PPTX, DOCX, XLSX, TXT",
-            type=["pdf", "pptx", "docx", "xlsx", "txt"],
-            accept_multiple_files=True,
+            speaker = st.text_input("👤 Спикер", placeholder="Имя, фамилия, должность")
+            materials_text = st.text_area("📝 Материалы / тезисы", height=100)
+
+            # Новость, выбранная в разделе «Мониторинг» кнопкой 📋
+            news_block = ""
+            if st.session_state.news_for_post:
+                n = st.session_state.news_for_post
+                with st.container(border=True):
+                    c1, c2 = st.columns([5, 1])
+                    with c1:
+                        st.caption("📰 Новость как источник")
+                        st.markdown(f"**{n['title']}**")
+                        st.caption(f"{n['source']} • {n.get('published', '')[:10]}")
+                    with c2:
+                        if st.button("✕", key="drop_news", use_container_width=True):
+                            st.session_state.news_for_post = None
+                            st.rerun()
+                news_block = (
+                    f"Новость-источник: {n['title']}\n"
+                    f"Издание: {n['source']}\n"
+                    f"Дата: {n.get('published', '')}\n"
+                    f"Ссылка: {n['url']}\n"
+                    f"Краткое содержание: {n.get('description', '')}"
+                )
+            
+            source_tab1, source_tab2 = st.tabs(["📤 Загрузить файлы", "☁️ Яндекс.Диск"])
+            
+            uploaded_files = None
+            with source_tab1:
+                uploaded_files = st.file_uploader(
+                    "📁 Файлы (PDF, PPTX, DOCX, XLSX, TXT)",
+                    type=["pdf", "pptx", "docx", "xlsx", "txt"],
+                    accept_multiple_files=True,
+                    key="main_uploader"
+                )
+            
+            with source_tab2:
+                if disk_api:
+                    st.info("📂 Файлы из базы знаний ЦСР")
+                    base_path = YANDEX_BASE_PATH
+                    folders_data = cached_list_disk(base_path)
+                    
+                    if folders_data:
+                        folders = [f for f in folders_data if f.get("type") == "dir"]
+                        files = [f for f in folders_data if f.get("type") == "file"]
+                        
+                        folder_names = ["📁 Все файлы"] + [f"📁 {f['name']}" for f in folders]
+                        selected_folder_display = st.selectbox(
+                            "Выберите тему:",
+                            folder_names,
+                            key="disk_folder_select"
+                        )
+                        
+                        if selected_folder_display == "📁 Все файлы":
+                            files_to_show = files
+                            current_path = base_path
+                        else:
+                            folder_name = selected_folder_display.replace("📁 ", "")
+                            folder_obj = next((f for f in folders if f['name'] == folder_name), None)
+                            if folder_obj:
+                                files_to_show = cached_list_disk(folder_obj.get("path"))
+                                files_to_show = [f for f in files_to_show if f.get("type") == "file"]
+                                current_path = folder_obj.get("path")
+                            else:
+                                files_to_show = []
+                        
+                        if files_to_show:
+                            st.write(f"**Файлы:** {len(files_to_show)}")
+                            selected_disk_files = []
+                            
+                            for f in files_to_show:
+                                ext = f['name'].lower().split('.')[-1]
+                                if ext in ['pdf', 'docx', 'xlsx', 'txt', 'pptx', 'doc', 'xls']:
+                                    file_icon = "📄" if ext == "pdf" else "📝" if ext in ["txt", "docx", "doc"] else "📊" if ext in ["xlsx", "xls"] else "🎬"
+                                    if st.checkbox(f"{file_icon} {f['name']}", key=f"disk_{f.get('path')}"):
+                                        selected_disk_files.append(f)
+                            
+                            if selected_disk_files:
+                                if st.button("✓ Добавить с диска", use_container_width=True):
+                                    disk_content = ""
+                                    for f in selected_disk_files:
+                                        path = f.get("path")
+                                        content = extract_yandex_file(disk_api, path)
+                                        if content:
+                                            disk_content += f"### {f['name']}\n{content}\n\n"
+                                    if disk_content:
+                                        st.session_state.disk_content = disk_content
+                                        st.success(f"✅ Загружено {len(selected_disk_files)} файлов с диска")
+                        else:
+                            st.info("📁 В выбранной папке нет поддерживаемых файлов")
+                    else:
+                        st.warning("❌ База знаний не найдена")
+                else:
+                    st.warning("⚠️ Яндекс.Диск не подключен")
+
+            if st.button("▶️ Сформировать", type="primary", use_container_width=True):
+                has_field_data = any(v.strip() for v in field_values.values() if v)
+                disk_content = st.session_state.get("disk_content", "")
+                
+                if not has_field_data and not materials_text.strip() and not uploaded_files and not disk_content and not news_block:
+                    st.warning("⚠️ Добавьте данные")
+                else:
+                    extracted_file_text = extract_text_from_files(uploaded_files) if uploaded_files else ""
+                    fields_text = format_fields_as_text(post_category, field_values)
+
+                    final_materials = "\n".join(filter(None, [
+                        fields_text,
+                        f"Спикер: {speaker}" if speaker else "",
+                        materials_text,
+                        news_block,
+                        extracted_file_text,
+                        disk_content
+                    ]))
+                    st.session_state.raw_source_data = final_materials
+
+                    style_block = build_style_block(st.session_state.get("selected_style_ids", []))
+                    system_rules = get_enhanced_system_rules(post_category, tone, text_length, use_citations)
+                    if style_block:
+                        system_rules += "\n" + style_block
+
+                    st.session_state.chat_history = [
+                        {"role": "system", "content": system_rules},
+                        {"role": "user", "content": st.session_state.raw_source_data},
+                    ]
+
+                    with st.spinner("✨ Создаю пост..."):
+                        result = call_openai(st.session_state.chat_history, TEMP_GENERATE)
+                        if result:
+                            st.session_state.current_text = result
+                            st.session_state.chat_history.append({"role": "assistant", "content": result})
+                            st.session_state.versions_history.append({"text": result, "label": "v1"})
+                            save_post(post_category, tone, text_length, result, 
+                                    st.session_state.raw_source_data, 1 if use_citations else 0)
+                            st.session_state.disk_content = ""
+                            st.rerun()
+
+    with right_column:
+        st.subheader("✨ Результат")
+        with st.container(border=True):
+            text_tab, fact_tab, history_tab, export_tab = st.tabs(["📄 Текст", "🔍 Проверка", "📋 История", "📥 Экспорт"])
+
+            with text_tab:
+                if st.session_state.current_text:
+                    st.code(st.session_state.current_text, language="markdown")
+
+                    st.divider()
+                    st.write("🔄 **Правки:**")
+                    with st.form("refine_form", clear_on_submit=True):
+                        refine_prompt = st.text_input("Что изменить?", placeholder="Пример: сделай короче")
+                        submitted = st.form_submit_button("✏️ Уточнить")
+                        if submitted and refine_prompt.strip():
+                            st.session_state.chat_history.append({"role": "user", "content": refine_prompt})
+                            api_messages = trim_history(st.session_state.chat_history)
+                            with st.spinner("✏️ Переписываю..."):
+                                result = call_openai(api_messages, TEMP_REFINE)
+                                if result:
+                                    st.session_state.current_text = result
+                                    st.session_state.chat_history.append({"role": "assistant", "content": result})
+                                    v_num = len(st.session_state.versions_history) + 1
+                                    st.session_state.versions_history.append({"text": result, "label": f"v{v_num}"})
+                                    st.rerun()
+                else:
+                    st.info("👈 Заполните данные слева")
+
+            with fact_tab:
+                if st.session_state.current_text:
+                    if st.button("🔍 Проверить", type="primary", use_container_width=True):
+                        fact_prompt = f"""Проверь текст на ошибки:
+1. Цифры, даты, фамилии — без искажений
+2. Нет дублирующихся блоков
+3. Правильность названий
+
+ИСХОДНИКИ: {st.session_state.raw_source_data[:1000]}
+ТЕКСТ: {st.session_state.current_text[:1000]}"""
+                        with st.spinner("🔍 Проверяю..."):
+                            result = call_openai([{"role": "user", "content": fact_prompt}], TEMP_FACTCHECK)
+                            if result:
+                                st.success("✅ Готово!")
+                                st.write(result)
+                else:
+                    st.info("Сначала создайте текст")
+
+            with history_tab:
+                if st.session_state.versions_history:
+                    for i, version in enumerate(reversed(st.session_state.versions_history)):
+                        col1, col2 = st.columns([4, 1])
+                        with col1:
+                            st.markdown(f"**{version['label']}**")
+                        with col2:
+                            if st.button("✓", key=f"v_{i}", use_container_width=True):
+                                st.session_state.current_text = version["text"]
+                                st.rerun()
+                        st.divider()
+                else:
+                    st.info("История версий")
+
+            with export_tab:
+                if st.session_state.current_text:
+                    docx_data = create_docx(st.session_state.current_text)
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.download_button(
+                            "📄 Word",
+                            data=docx_data,
+                            file_name="post.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
+                    with col2:
+                        st.download_button(
+                            "📝 Markdown",
+                            data=st.session_state.current_text,
+                            file_name="post.md",
+                            mime="text/markdown"
+                        )
+                    with col3:
+                        st.download_button(
+                            "📋 TXT",
+                            data=st.session_state.current_text.encode('utf-8'),
+                            file_name="post.txt",
+                            mime="text/plain"
+                        )
+                else:
+                    st.info("Создайте текст")
+
+# ============================================================
+# DASHBOARD МЕТРИК
+# ============================================================
+elif st.session_state.show_metrics:
+    st.subheader("📊 Аналитика и метрики")
+    
+    if st.button("← Вернуться"):
+        st.session_state.show_metrics = False
+        st.rerun()
+    
+    st.divider()
+    
+    metrics = get_metrics()
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Всего постов</div>
+            <div class="metric-value">{metrics['total_posts']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">За неделю</div>
+            <div class="metric-value">{metrics['posts_week']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">За месяц</div>
+            <div class="metric-value">{metrics['posts_month']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col4:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">С цитатами</div>
+            <div class="metric-value">{metrics['with_citations']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    col1, col2 = st.columns(2)
+    
+    def chart_from_pairs(pairs, label, strip_numbers=False):
+        """Строит график с ЧИТАЕМЫМИ подписями по оси X."""
+        if not pairs:
+            st.info("Нет данных")
+            return
+        names = []
+        for name, _ in pairs:
+            n = name or "—"
+            if strip_numbers:
+                n = re.sub(r"^\d+\.\s*", "", n)
+            names.append(n[:28])
+        counts = [c for _, c in pairs]
+        df = pd.DataFrame({label: counts}, index=names)
+        st.bar_chart(df, use_container_width=True)
+
+    with col1:
+        st.subheader("📂 По рубрикам")
+        chart_from_pairs(metrics['by_category'], "Постов", strip_numbers=True)
+
+    with col2:
+        st.subheader("🎙️ По тону")
+        chart_from_pairs(metrics['by_tone'], "Постов")
+
+    st.divider()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("📏 По объему")
+        chart_from_pairs(metrics['by_length'], "Постов")
+
+    with col2:
+        st.subheader("💬 Использование цитат")
+        # Раньше здесь передавался словарь из чисел — Streamlit падал с ошибкой
+        chart_from_pairs(
+            [("С цитатами", metrics['with_citations']),
+             ("Без цитат", metrics['without_citations'])],
+            "Постов"
         )
+    
+    st.divider()
+    
+    st.subheader("📋 История последних постов")
+    posts = get_posts_history(10)
+    if posts:
+        for post_id, category, tone, text, created_at, has_citations in posts:
+            with st.expander(f"{category} • {created_at[:10]} • {'💬' if has_citations else ''}"):
+                st.write(text[:200] + "...")
+    else:
+        st.info("Нет постов")
 
-        if st.button("Сформировать материал", type="primary", use_container_width=True):
-            has_field_data = any(v.strip() for v in field_values.values() if v)
-            if not has_field_data and not materials_text.strip() and not uploaded_files:
-                st.warning("Заполните хотя бы одно поле, добавьте тезисы или загрузите файл.")
+# ============================================================
+# ЯНДЕКС.ДИСК БРАУЗЕР
+# ============================================================
+elif st.session_state.show_yandex:
+    st.subheader("☁️ База знаний ЦСР")
+    
+    if st.button("← Вернуться"):
+        st.session_state.show_yandex = False
+        st.rerun()
+    
+    st.divider()
+    
+    if not disk_api:
+        st.error("⚠️ Яндекс.Диск не подключен")
+        st.info("Добавьте YANDEX_DISK_TOKEN в Streamlit Cloud secrets")
+    else:
+        base_path = YANDEX_BASE_PATH
+        
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.write(f"**📂 {base_path}**")
+        with col2:
+            pass
+        with col3:
+            if st.button("🔄 Обновить", use_container_width=True):
+                st.rerun()
+        
+        st.divider()
+        
+        items = cached_list_disk(base_path)
+
+        if not items:
+            st.error(f"Папка «{base_path}» не найдена или пуста.")
+            st.caption(
+                "Имя папки на Диске должно совпадать с константой YANDEX_BASE_PATH "
+                "в начале файла. Ниже — что реально лежит в корне вашего Диска:"
+            )
+            root = cached_list_disk("/")
+            if root:
+                for r in root:
+                    kind = "📁" if r.get("type") == "dir" else "📄"
+                    st.code(f'{kind}  {r.get("path")}')
+                st.caption(
+                    "Скопируйте нужный путь и подставьте его в YANDEX_BASE_PATH."
+                )
             else:
-                extracted_file_text = extract_text_from_files(uploaded_files)
-                fields_text = format_fields_as_text(post_category, field_values)
-
-                final_materials = "\n".join(filter(None, [
-                    fields_text,
-                    f"Спикер: {speaker}" if speaker else "",
-                    materials_text,
-                    extracted_file_text,
-                ]))
-                st.session_state.raw_source_data = final_materials
-
-                style_block = build_style_block(st.session_state.get("selected_style_ids", []))
-
-                system_rules = f"""
-Ты — PR-редактор. Пиши пост для Telegram-канала. Рубрика: {post_category}.
-Тон: {tone}. Объем: {text_length}.
-Заголовок: первая строка — заголовок, оформи её через **жирный текст** (markdown-нотация).
-Подвал: всегда добавляй "⭐️ подписаться на канал".
-{style_block}
-"""
-                st.session_state.chat_history = [
-                    {"role": "system", "content": system_rules},
-                    {"role": "user", "content": st.session_state.raw_source_data},
-                ]
-
-                with st.spinner("Пишу текст..."):
-                    result = call_openai(st.session_state.chat_history, TEMP_GENERATE)
-                    if result:
-                        st.session_state.current_text = result
-                        st.session_state.chat_history.append({"role": "assistant", "content": result})
-                        st.session_state.versions_history.append({"text": result, "label": "Первая версия"})
-                        st.rerun()
-
-with right_column:
-    st.subheader("Результат")
-    with st.container(border=True):
-        text_tab, fact_tab, history_tab = st.tabs(["Готовый текст", "Проверка фактов", "История версий"])
-
-        with text_tab:
-            if st.session_state.current_text:
-                st.code(st.session_state.current_text, language="markdown")
-
-                docx_data = create_docx(st.session_state.current_text)
-                st.download_button(
-                    label="📥 Скачать в формате Word (.docx)",
-                    data=docx_data,
-                    file_name="post.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                st.warning(
+                    "Корень Диска тоже не читается — скорее всего, неверный "
+                    "YANDEX_DISK_TOKEN или у токена нет прав на чтение Диска."
                 )
 
+        if items:
+            folders = [f for f in items if f.get("type") == "dir"]
+            files = [f for f in items if f.get("type") == "file"]
+            
+            st.write(f"**📊 Статистика:** {len(folders)} папок, {len(files)} файлов")
+            st.divider()
+            
+            if folders:
+                st.subheader("📁 Тематические папки")
+                for folder in sorted(folders, key=lambda x: x.get("name", "")):
+                    folder_name = folder.get("name", "")
+                    with st.expander(f"📁 {folder_name}"):
+                        sub_items = cached_list_disk(folder.get("path"))
+                        sub_files = [f for f in sub_items if f.get("type") == "file"]
+                        
+                        if sub_files:
+                            st.write(f"**{len(sub_files)} файлов:**")
+                            for f in sorted(sub_files, key=lambda x: x.get("name", "")):
+                                file_name = f.get("name", "")
+                                file_size = f.get("size", 0)
+                                size_mb = file_size / (1024 * 1024) if file_size else 0
+                                
+                                ext = file_name.lower().split('.')[-1]
+                                icon = "📄" if ext == "pdf" else "📝" if ext in ["txt", "docx", "doc"] else "📊" if ext in ["xlsx", "xls"] else "🎬" if ext == "pptx" else "🎨" if ext in ["ai", "psd"] else "📑"
+                                
+                                col1, col2, col3 = st.columns([2.5, 0.5, 0.5])
+                                with col1:
+                                    st.write(f"{icon} {file_name}")
+                                with col2:
+                                    st.caption(f"{size_mb:.1f} MB")
+                                with col3:
+                                    # download_button со ссылкой на диск: файл
+                                    # подгружается только при самом нажатии
+                                    st.download_button(
+                                        "📥",
+                                        data=lambda p=f.get("path"): (disk_api.download_file(p) or b""),
+                                        file_name=file_name,
+                                        key=f"dl_{f.get('path')}",
+                                        use_container_width=True,
+                                    )
+                        else:
+                            st.info("Папка пуста")
+            
+            if files:
                 st.divider()
-                st.write("🔄 **Внести правки:**")
-                with st.form("refine_form", clear_on_submit=True):
-                    refine_prompt = st.text_input("Что нужно изменить? (например: 'сделай короче', 'убери эмодзи')")
-                    submitted = st.form_submit_button("Уточнить текст")
-                    if submitted and refine_prompt.strip():
-                        st.session_state.chat_history.append({"role": "user", "content": refine_prompt})
-                        api_messages = trim_history(st.session_state.chat_history)
-                        with st.spinner("Переписываю..."):
-                            result = call_openai(api_messages, TEMP_REFINE)
-                            if result:
-                                st.session_state.current_text = result
-                                st.session_state.chat_history.append({"role": "assistant", "content": result})
-                                st.session_state.versions_history.append({"text": result, "label": refine_prompt})
-                                st.rerun()
-                    elif submitted:
-                        st.warning("Опишите, что нужно изменить.")
-            else:
-                st.info("👈 Заполните данные слева и нажмите «Сформировать материал»")
-
-        with fact_tab:
-            if st.session_state.current_text:
-                st.write("Здесь ИИ сверяет готовый текст с исходниками на предмет искажений.")
-                if st.button("Запустить проверку", type="primary"):
-                    fact_prompt = f"""
-Ты строгий фактчекер. Сравни ИСХОДНИКИ и ГОТОВЫЙ ТЕКСТ.
-1. Убедись, что все цифры, даты и фамилии перенесены без искажений.
-2. Найди дублирующиеся блоки статистики и подсвети их как ошибку.
-3. Жесткая проверка корпоративных стандартов: слово «муниципальные» написано корректно
-   (опечатка «нумиципальный» недопустима), а при упоминании медикаментов выведены ТОЛЬКО
-   проценты изменения без названий самих препаратов.
-
-ИСХОДНИКИ: {st.session_state.raw_source_data}
-ГОТОВЫЙ ТЕКСТ: {st.session_state.current_text}
-"""
-                    with st.spinner("Сверяю данные..."):
-                        result = call_openai([{"role": "user", "content": fact_prompt}], TEMP_FACTCHECK)
-                        if result:
-                            st.success("Проверка завершена!")
-                            st.write(result)
-            else:
-                st.info("Сначала сгенерируйте текст.")
-
-        with history_tab:
-            if not st.session_state.versions_history:
-                st.write("Здесь будут сохраняться все версии текстов (от первой генерации до последних правок).")
-            else:
-                for i, version in enumerate(reversed(st.session_state.versions_history)):
-                    version_number = len(st.session_state.versions_history) - i
-                    col1, col2 = st.columns([4, 1])
+                st.subheader("📄 Файлы в корне")
+                for f in sorted(files, key=lambda x: x.get("name", "")):
+                    file_name = f.get("name", "")
+                    file_size = f.get("size", 0)
+                    size_mb = file_size / (1024 * 1024) if file_size else 0
+                    
+                    ext = file_name.lower().split('.')[-1]
+                    icon = "📄" if ext == "pdf" else "📝" if ext in ["txt", "docx"] else "📊" if ext in ["xlsx", "xls"] else "🎨" if ext in ["ai", "psd"] else "📑"
+                    
+                    col1, col2, col3 = st.columns([2.5, 0.5, 0.5])
                     with col1:
-                        st.markdown(f"**Версия {version_number}** · _{version['label']}_")
+                        st.write(f"{icon} {file_name}")
                     with col2:
-                        if st.button("Восстановить", key=f"restore_{version_number}"):
-                            st.session_state.current_text = version["text"]
+                        st.caption(f"{size_mb:.1f} MB")
+                    with col3:
+                        st.download_button(
+                            "📥",
+                            data=lambda p=f.get("path"): (disk_api.download_file(p) or b""),
+                            file_name=file_name,
+                            key=f"dl_root_{f.get('path')}",
+                            use_container_width=True,
+                        )
+        else:
+            st.warning(f"❌ Не удалось загрузить содержимое базы знаний")
+
+# ============================================================
+# МОНИТОРИНГ НОВОСТЕЙ
+# ============================================================
+elif st.session_state.show_news:
+    st.subheader("📰 Мониторинг новостей ЦСР")
+    
+    if st.button("← Вернуться"):
+        st.session_state.show_news = False
+        st.rerun()
+    
+    st.divider()
+    
+    col1, col2, col3 = st.columns([2, 1, 1])
+    
+    with col1:
+        query = st.text_input(
+            "🔍 Поиск:",
+            value="ЦСР OR 'Центр стратегических разработок'",
+            placeholder="Поисковый запрос"
+        )
+    
+    with col2:
+        days = st.selectbox("📅 Период:", [7, 14, 30], index=0)
+    
+    with col3:
+        st.write("")
+        if st.button("🔄 Обновить", use_container_width=True):
+            st.session_state.news_cache_buster = (
+                st.session_state.get("news_cache_buster", 0) + 1
+            )
+            st.rerun()
+    
+    st.divider()
+    
+    tab1, tab2, tab3 = st.tabs(["🔍 Новости", "⭐ Избранное", "📊 Статистика"])
+    
+    with tab1:
+        st.write("**Последние новости о ЦСР**")
+        
+        col_google, col_api = st.columns(2)
+        with col_google:
+            use_google = st.checkbox("📰 Google News (бесплатно)", value=True)
+        with col_api:
+            use_api = st.checkbox("🔐 News API", value=NEWS_API_KEY is not None, disabled=NEWS_API_KEY is None)
+        
+        with st.spinner("📰 Загружаю новости..."):
+            news_list = cached_fetch_news(
+                query, use_api, use_google, days,
+                st.session_state.get("news_cache_buster", 0)
+            )
+        
+        if news_list:
+            st.write(f"**Найдено: {len(news_list)} новостей**")
+            st.divider()
+            
+            for i, news in enumerate(news_list):
+                title = news.get('title', 'N/A')
+                source = news.get('source', 'Unknown')
+                published = news.get('published', 'N/A')
+                description = news.get('description', '')
+                url = news.get('url', '')
+                
+                with st.container(border=True):
+                    col1, col2 = st.columns([5, 1])
+                    
+                    with col1:
+                        st.markdown(f"**[{title}]({url})**")
+                        st.caption(f"📰 {source} • {published[:10]}")
+                        
+                        if description:
+                            st.write(description[:300] + "..." if len(description) > 300 else description)
+                    
+                    with col2:
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            if st.button("⭐", key=f"fav_{i}", help="В избранное", use_container_width=True):
+                                news_monitor.save_favorite(title, source, url, published, description)
+                                st.success("✅")
+                        
+                        with col_b:
+                            if st.button("📋", key=f"use_{i}", help="В пост", use_container_width=True):
+                                st.session_state.news_for_post = {
+                                    'title': title,
+                                    'source': source,
+                                    'url': url,
+                                    'description': description,
+                                    'published': published
+                                }
+                                st.session_state.show_news = False
+                                st.info("✅ Новость добавлена как источник!")
+                
+                if i < len(news_list) - 1:
+                    st.divider()
+        else:
+            st.info("📭 Новостей не найдено. Попробуйте другой запрос.")
+    
+    with tab2:
+        st.write("**Избранные новости**")
+        
+        favorites = news_monitor.get_favorites()
+        
+        if favorites:
+            st.write(f"**Всего: {len(favorites)} новостей**")
+            st.divider()
+            
+            for title, source, url, published, description in favorites:
+                with st.container(border=True):
+                    col1, col2 = st.columns([5, 1])
+                    
+                    with col1:
+                        st.markdown(f"**[{title}]({url})**")
+                        st.caption(f"📰 {source} • {published[:10]}")
+                        
+                        if description:
+                            st.write(description[:200] + "...")
+                    
+                    with col2:
+                        if st.button("🗑️", key=f"del_fav_{title[:20]}", use_container_width=True):
+                            news_monitor.delete_favorite(title)
                             st.rerun()
-                    st.info(version["text"])
+                
+                st.divider()
+        else:
+            st.info("⭐ Избранные новости пока пусты")
+    
+    with tab3:
+        st.write("**Статистика мониторинга**")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">Найдено новостей</div>
+                <div class="metric-value">{len(news_list) if 'news_list' in locals() else 0}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            favorites = news_monitor.get_favorites()
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">В избранном</div>
+                <div class="metric-value">{len(favorites)}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            status = "🟢" if NEWS_API_KEY else "🔴"
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">News API</div>
+                <div class="metric-value">{status}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.divider()
+        st.info("""
+        📰 **Источники новостей:**
+        - **News API** - полнотекстовый поиск (если подключен)
+        - **Google News** - RSS парсер (всегда доступен)
+        
+        💡 **Как использовать:**
+        1. Введите поисковый запрос
+        2. Выберите источники
+        3. Нажмите "Обновить" для поиска
+        4. ⭐ Сохраняйте интересные новости
+        5. 📋 Добавляйте источники в пост
+        """)
