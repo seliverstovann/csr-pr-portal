@@ -31,192 +31,269 @@ from pptx import Presentation
 
 CSR_THEME_CSS = """
 <style>
-/* ============================================================
-   ФИРМЕННАЯ СВЕТЛАЯ ТЕМА ЦСР
-   Палитра снята напрямую с инфографики «Цифры и факты»:
-   фон #B6B3FA, глубокий синий #221AC8, стеклянные плашки
-   #C2BEFA с белой окантовкой.
-   ============================================================ */
 :root {
-    --csr-bg-top:    #C6C3FC;
-    --csr-bg-bottom: #ADAAFA;
-    --csr-ink:       #221AC8;   /* заголовки и цифры */
-    --csr-ink-soft:  #33308F;   /* основной текст */
-    --csr-ink-mute:  #5B57A8;   /* подписи */
-    --csr-glass:     rgba(255, 255, 255, 0.42);
-    --csr-glass-2:   rgba(255, 255, 255, 0.62);
-    --csr-edge:      rgba(255, 255, 255, 0.90);
+    --csr-bg: #F6F5FB;
+    --csr-bg-soft: #FBFAFE;
+    --csr-surface: #FFFFFF;
+    --csr-surface-2: #F1F0F8;
+    --csr-ink: #1D1D2B;
+    --csr-ink-soft: #56556B;
+    --csr-muted: #8B899D;
+    --csr-primary: #3B376E;
+    --csr-primary-2: #5E5998;
+    --csr-lilac: #A4A3CE;
+    --csr-border: rgba(59, 55, 110, 0.10);
+    --csr-border-strong: rgba(59, 55, 110, 0.18);
+    --csr-shadow: 0 14px 40px rgba(35, 33, 66, 0.07);
+    --csr-shadow-soft: 0 6px 20px rgba(35, 33, 66, 0.05);
 }
 
 * { box-sizing: border-box; }
 
-.stApp {
-    background: linear-gradient(160deg, var(--csr-bg-top) 0%, var(--csr-bg-bottom) 100%);
-    background-attachment: fixed;
+html, body, [data-testid="stAppViewContainer"], .stApp {
+    color: var(--csr-ink);
+    background:
+        radial-gradient(circle at 86% 0%, rgba(164,163,206,0.16), transparent 26%),
+        linear-gradient(180deg, #FCFBFE 0%, var(--csr-bg) 100%) !important;
 }
 
-html, body, [data-testid="stAppViewContainer"] {
-    color: var(--csr-ink-soft);
+[data-testid="stHeader"] {
+    background: rgba(252,251,254,0.84) !important;
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(59,55,110,0.05);
 }
 
-/* --- Заголовки: плотные, в глубоком синем --- */
+.block-container {
+    max-width: 1450px;
+    padding-top: 2.15rem !important;
+    padding-bottom: 3rem !important;
+    padding-left: 2.3rem !important;
+    padding-right: 2.3rem !important;
+}
+
 h1, h2, h3, h4, h5, h6 {
     color: var(--csr-ink) !important;
-    font-weight: 800 !important;
-    letter-spacing: -0.02em !important;
+    font-weight: 750 !important;
+    letter-spacing: -0.025em !important;
 }
-h1 { font-size: 2.1rem !important; text-transform: uppercase; }
-h2 { font-size: 1.35rem !important; }
-h3 { font-size: 1.1rem !important; }
+h1 { font-size: 2.2rem !important; }
+h2 { font-size: 1.38rem !important; }
+h3 { font-size: 1.08rem !important; }
 
-/* --- Боковая панель: матовое стекло --- */
+/* Sidebar */
 [data-testid="stSidebar"] {
-    background: rgba(255, 255, 255, 0.34);
-    backdrop-filter: blur(18px);
-    border-right: 1px solid var(--csr-edge);
+    background: rgba(255,255,255,0.92) !important;
+    border-right: 1px solid var(--csr-border) !important;
+    box-shadow: 10px 0 32px rgba(35,33,66,0.025);
 }
-[data-testid="stSidebar"] * { color: var(--csr-ink-soft); }
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] .stMarkdown p { color: var(--csr-ink-soft) !important; }
+[data-testid="stSidebar"] .block-container {
+    padding: 1.35rem 1.15rem 1.5rem !important;
+}
+[data-testid="stSidebar"] [data-testid="stImage"] {
+    margin-bottom: 0.6rem;
+}
+.sidebar-product-name {
+    font-size: 1.07rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--csr-ink);
+    margin-top: 0.2rem;
+}
+.sidebar-product-caption {
+    color: var(--csr-muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+    margin-top: 0.25rem;
+    margin-bottom: 0.7rem;
+}
+.sidebar-status {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    font-size: .76rem;
+    font-weight: 650;
+    color: #5D5A75;
+    background: #F5F4F9;
+    border: 1px solid var(--csr-border);
+    border-radius: 999px;
+    padding: .42rem .66rem;
+    margin: .2rem 0 .4rem;
+}
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #5E9B74; display: inline-block; }
 
-/* --- Стеклянные карточки-контейнеры, как плашки на инфографике --- */
+/* Hero */
+.csr-hero {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(245,244,251,0.98));
+    border: 1px solid var(--csr-border);
+    border-radius: 28px;
+    padding: 30px 34px 28px;
+    box-shadow: var(--csr-shadow);
+    margin-bottom: 1.5rem;
+}
+.csr-hero::after {
+    content: "";
+    position: absolute;
+    width: 250px;
+    height: 250px;
+    right: -90px;
+    top: -120px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(94,89,152,0.18), rgba(94,89,152,0));
+}
+.csr-kicker {
+    display: inline-block;
+    color: var(--csr-primary);
+    background: rgba(94,89,152,0.08);
+    border: 1px solid rgba(94,89,152,0.10);
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: .74rem;
+    font-weight: 750;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+.csr-hero-title {
+    color: var(--csr-ink);
+    font-size: 2.05rem;
+    line-height: 1.08;
+    font-weight: 820;
+    letter-spacing: -0.04em;
+    margin: 0 0 8px;
+}
+.csr-hero-subtitle {
+    color: var(--csr-ink-soft);
+    max-width: 800px;
+    font-size: .98rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Cards / containers */
 [data-testid="stVerticalBlockBorderWrapper"] {
-    background: var(--csr-glass);
-    backdrop-filter: blur(14px);
-    border: 1.5px solid var(--csr-edge) !important;
-    border-radius: 18px !important;
-    box-shadow: 0 8px 28px rgba(34, 26, 200, 0.10);
+    background: rgba(255,255,255,0.94) !important;
+    border: 1px solid var(--csr-border) !important;
+    border-radius: 22px !important;
+    box-shadow: var(--csr-shadow-soft) !important;
 }
 
-/* --- Плашка с цифрой: главный мотив макета --- */
 .metric-card {
-    background: var(--csr-glass-2);
-    border: 1.5px solid var(--csr-edge);
-    border-radius: 16px;
-    padding: 22px 16px;
-    text-align: center;
-    box-shadow: 0 6px 20px rgba(34, 26, 200, 0.10);
-    transition: transform .25s ease, box-shadow .25s ease;
+    background: linear-gradient(180deg, #FFFFFF 0%, #F9F8FC 100%);
+    border: 1px solid var(--csr-border);
+    border-radius: 22px;
+    padding: 21px 20px 19px;
+    text-align: left;
+    box-shadow: var(--csr-shadow-soft);
+    min-height: 126px;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
 .metric-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 30px rgba(34, 26, 200, 0.18);
-}
-.metric-value {
-    font-size: 2.6rem;
-    font-weight: 800;
-    color: var(--csr-ink);
-    line-height: 1.1;
-    margin: 8px 0 2px;
+    transform: translateY(-2px);
+    border-color: var(--csr-border-strong);
+    box-shadow: var(--csr-shadow);
 }
 .metric-label {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--csr-ink-mute);
+    font-size: .72rem;
+    font-weight: 750;
+    color: var(--csr-muted);
     text-transform: uppercase;
-    letter-spacing: 0.09em;
+    letter-spacing: .085em;
+    margin-bottom: 15px;
+}
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: 820;
+    color: var(--csr-primary);
+    line-height: 1;
+    letter-spacing: -0.04em;
 }
 
-/* --- Кнопки --- */
+/* Inputs */
+input, textarea,
+[data-baseweb="input"], [data-baseweb="textarea"], [data-baseweb="select"] > div {
+    background: #FFFFFF !important;
+    color: var(--csr-ink) !important;
+    border-color: var(--csr-border) !important;
+    border-radius: 13px !important;
+}
+[data-baseweb="select"] > div:hover,
+input:hover, textarea:hover { border-color: var(--csr-border-strong) !important; }
+input:focus, textarea:focus {
+    border-color: rgba(59,55,110,.35) !important;
+    box-shadow: 0 0 0 3px rgba(94,89,152,.08) !important;
+}
+input::placeholder, textarea::placeholder { color: #A6A4B2 !important; }
+
+/* Buttons */
+.stButton > button, .stDownloadButton > button {
+    min-height: 42px !important;
+    border-radius: 13px !important;
+    font-weight: 680 !important;
+    border: 1px solid var(--csr-border) !important;
+    background: #FFFFFF !important;
+    color: var(--csr-primary) !important;
+    box-shadow: none !important;
+    transition: all .18s ease !important;
+}
+.stButton > button:hover, .stDownloadButton > button:hover {
+    transform: translateY(-1px);
+    border-color: var(--csr-border-strong) !important;
+    box-shadow: var(--csr-shadow-soft) !important;
+}
 button[kind="primary"] {
-    background: var(--csr-ink) !important;
+    background: linear-gradient(135deg, #3B376E 0%, #5E5998 100%) !important;
     color: #FFFFFF !important;
     border: none !important;
-    border-radius: 12px !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.01em !important;
-    box-shadow: 0 6px 18px rgba(34, 26, 200, 0.30) !important;
-    transition: transform .2s ease, box-shadow .2s ease !important;
+    box-shadow: 0 10px 24px rgba(59,55,110,.20) !important;
 }
-button[kind="primary"]:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 10px 26px rgba(34, 26, 200, 0.40) !important;
-}
-button[kind="secondary"], button[kind="tertiary"] {
-    background: var(--csr-glass-2) !important;
-    color: var(--csr-ink) !important;
-    border: 1.5px solid var(--csr-edge) !important;
-    border-radius: 12px !important;
-    font-weight: 600 !important;
-}
-button[kind="secondary"]:hover, button[kind="tertiary"]:hover {
-    background: rgba(255, 255, 255, 0.85) !important;
-}
+button[kind="primary"]:hover { box-shadow: 0 13px 30px rgba(59,55,110,.27) !important; }
 
-/* --- Поля ввода --- */
-input, textarea, select,
-[data-baseweb="input"], [data-baseweb="textarea"], [data-baseweb="select"] > div {
-    background: rgba(255, 255, 255, 0.70) !important;
-    color: var(--csr-ink-soft) !important;
-    border: 1.5px solid var(--csr-edge) !important;
-    border-radius: 12px !important;
+/* Tabs */
+[role="tablist"] {
+    gap: 7px;
+    border-bottom: 1px solid var(--csr-border);
 }
-input:focus, textarea:focus {
-    border-color: var(--csr-ink) !important;
-    box-shadow: 0 0 0 3px rgba(34, 26, 200, 0.14) !important;
-}
-input::placeholder, textarea::placeholder { color: #8A87C4 !important; }
-
-/* --- Вкладки --- */
-[role="tablist"] { border-bottom: 1.5px solid var(--csr-edge); gap: 4px; }
 [role="tab"] {
-    color: var(--csr-ink-mute) !important;
-    font-weight: 600 !important;
-    border-radius: 10px 10px 0 0;
+    color: var(--csr-muted) !important;
+    font-weight: 650 !important;
+    border-radius: 10px 10px 0 0 !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
 }
-[role="tab"]:hover { background: rgba(255, 255, 255, 0.45); }
 [role="tab"][aria-selected="true"] {
-    color: var(--csr-ink) !important;
-    background: rgba(255, 255, 255, 0.62);
-    border-bottom: 2px solid var(--csr-ink) !important;
+    color: var(--csr-primary) !important;
+    background: rgba(94,89,152,.055) !important;
+    border-bottom-color: var(--csr-primary) !important;
 }
 
-/* --- Сообщения --- */
-[data-testid="stAlert"] {
-    background: rgba(255, 255, 255, 0.62) !important;
-    border: 1.5px solid var(--csr-edge) !important;
-    border-radius: 14px !important;
-    color: var(--csr-ink-soft) !important;
-}
-
-/* --- Блок готового текста --- */
+/* Supporting components */
+[data-testid="stAlert"],
+[data-testid="stExpander"],
+[data-testid="stFileUploaderDropzone"],
 [data-testid="stCodeBlock"], pre {
-    background: rgba(255, 255, 255, 0.72) !important;
-    border: 1.5px solid var(--csr-edge) !important;
-    border-radius: 14px !important;
-}
-[data-testid="stCodeBlock"] code, pre code, code {
-    color: var(--csr-ink-soft) !important;
-    background: transparent !important;
-    font-size: 0.93rem !important;
-}
-
-/* --- Раскрывающиеся блоки --- */
-[data-testid="stExpander"] {
-    background: rgba(255, 255, 255, 0.42) !important;
-    border: 1.5px solid var(--csr-edge) !important;
-    border-radius: 14px !important;
-}
-[data-testid="stExpander"] summary { color: var(--csr-ink) !important; font-weight: 700 !important; }
-
-/* --- Зона загрузки файлов --- */
-[data-testid="stFileUploaderDropzone"] {
-    background: rgba(255, 255, 255, 0.42) !important;
-    border: 2px dashed rgba(34, 26, 200, 0.32) !important;
+    background: rgba(255,255,255,.92) !important;
+    border: 1px solid var(--csr-border) !important;
     border-radius: 16px !important;
+    box-shadow: none !important;
 }
+[data-testid="stExpander"] summary { color: var(--csr-ink) !important; font-weight: 680 !important; }
+[data-testid="stFileUploaderDropzone"] { border-style: dashed !important; }
+[data-testid="stCodeBlock"] code, pre code, code { color: #353449 !important; background: transparent !important; }
 
-/* --- Мелочи --- */
-a { color: var(--csr-ink) !important; font-weight: 600; text-decoration: none !important; }
+[data-testid="stMarkdownContainer"] p { color: var(--csr-ink-soft) !important; line-height: 1.62 !important; }
+[data-testid="stCaptionContainer"], .stCaption, small { color: var(--csr-muted) !important; }
+label { color: #45435B !important; font-weight: 590 !important; }
+a { color: var(--csr-primary) !important; font-weight: 650; text-decoration: none !important; }
 a:hover { text-decoration: underline !important; }
 hr {
-    border: none !important; height: 1.5px !important;
-    background: linear-gradient(90deg, transparent, var(--csr-edge), transparent) !important;
+    border: none !important;
+    height: 1px !important;
+    background: linear-gradient(90deg, transparent, rgba(59,55,110,.11), transparent) !important;
+    margin: 1.15rem 0 !important;
 }
-[data-testid="stMarkdownContainer"] p { color: var(--csr-ink-soft) !important; line-height: 1.6 !important; }
-[data-testid="stCaptionContainer"], .stCaption, small { color: var(--csr-ink-mute) !important; }
-[data-testid="stMetricValue"] { color: var(--csr-ink) !important; font-weight: 800 !important; }
-footer { visibility: hidden; }
+footer, #MainMenu { visibility: hidden; }
 </style>
 """
 
@@ -231,6 +308,8 @@ st.set_page_config(
 )
 
 st.markdown(CSR_THEME_CSS, unsafe_allow_html=True)
+
+LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "csr_logo.png")
 
 MODEL = "gpt-4o"
 TEMP_GENERATE = 0.4
@@ -954,6 +1033,19 @@ def format_fields_as_text(category, values):
             lines.append(f"{field['label']}: {val}")
     return "\n".join(lines)
 
+def render_page_hero(title, subtitle, kicker="ЦСР · PR WORKSPACE"):
+    st.markdown(
+        f"""
+        <div class="csr-hero">
+            <div class="csr-kicker">{kicker}</div>
+            <div class="csr-hero-title">{title}</div>
+            <p class="csr-hero-subtitle">{subtitle}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 # ============================================================
 # SESSION STATE
 # ============================================================
@@ -980,50 +1072,49 @@ if "news_for_post" not in st.session_state:
 # БОКОВАЯ ПАНЕЛЬ
 # ============================================================
 with st.sidebar:
-    st.title("⚡️ ЦСР PR-портал")
-    st.caption("Премиальный ИИ-ассистент пресс-службы")
-
-    # Видно ли, что данные реально сохраняются
-    if storage is None:
-        st.error(
-            "Хранилище не подключено: история и примеры пропадут "
-            "при перезапуске. Нужен YANDEX_DISK_TOKEN."
-        )
-    elif storage.writable is False:
-        st.error(
-            f"Диск подключён, но запись не проходит ({storage.last_error}). "
-            "Проверьте право записи у токена."
-        )
+    if os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, width=168)
     else:
-        st.caption("💾 Данные сохраняются на Яндекс.Диск")
+        st.markdown("### ЦСР")
 
-    st.divider()
-
-    task = st.selectbox("📝 Задача:", ["Написать пост для Telegram-канала"])
-    post_category = st.selectbox("📂 Рубрика:", list(CATEGORY_FIELDS.keys()))
-
-    st.divider()
-    st.subheader("⚙️ Настройки")
-    text_length = st.select_slider(
-        "Объем:", 
-        options=["Короткий (до 1000 зн.)", "Стандартный", "Развернутый (лонгрид)"], 
-        value="Стандартный"
+    st.markdown(
+        """
+        <div class="sidebar-product-name">PR-портал</div>
+        <div class="sidebar-product-caption">Рабочее пространство пресс-службы</div>
+        """,
+        unsafe_allow_html=True,
     )
-    tone = st.selectbox(
-        "Тональность:",
-        ["Строгий (сухие факты)", "Стандарт (информационный)", "Живой (для соцсетей)"],
-    )
-    
-    st.divider()
-    st.subheader("🆕 Опции")
-    use_citations = st.checkbox("💬 Использовать цитаты", value=False)
+
+    if storage is None:
+        st.warning("Хранилище не подключено")
+    elif storage.writable is False:
+        st.warning("Яндекс.Диск подключён без записи")
+    else:
+        st.markdown(
+            '<div class="sidebar-status"><span class="status-dot"></span>Данные сохраняются на Яндекс.Диск</div>',
+            unsafe_allow_html=True,
+        )
 
     st.divider()
-    st.subheader("📚 Примеры стиля")
-    
-    with st.expander("➕ Добавить примеры"):
+
+    task = st.selectbox("Задача", ["Написать пост для Telegram-канала"])
+    post_category = st.selectbox("Рубрика", list(CATEGORY_FIELDS.keys()))
+
+    with st.expander("Настройки текста", expanded=True):
+        text_length = st.select_slider(
+            "Объем",
+            options=["Короткий (до 1000 зн.)", "Стандартный", "Развернутый (лонгрид)"],
+            value="Стандартный",
+        )
+        tone = st.selectbox(
+            "Тональность",
+            ["Строгий (сухие факты)", "Стандарт (информационный)", "Живой (для соцсетей)"],
+        )
+        use_citations = st.checkbox("Использовать цитаты", value=False)
+
+    with st.expander("Примеры стиля"):
         style_files = st.file_uploader(
-            "Файлы",
+            "Добавить файлы",
             type=["txt", "pdf", "docx", "html", "htm"],
             accept_multiple_files=True,
             key="style_files_uploader",
@@ -1031,69 +1122,92 @@ with st.sidebar:
         pasted_examples = st.text_area(
             "Или вставьте текст",
             key="style_paste_area",
-            height=80
+            height=80,
         )
-        if st.button("✓ Добавить", use_container_width=True):
+        if st.button("Добавить примеры", use_container_width=True):
             new_texts = []
             for f in style_files or []:
                 t = extract_text_from_file(f)
                 if t.strip():
                     new_texts.append(t)
             if pasted_examples.strip():
-                new_texts.extend([chunk.strip() for chunk in pasted_examples.split("\n---\n") if chunk.strip()])
+                new_texts.extend(
+                    [chunk.strip() for chunk in pasted_examples.split("\n---\n") if chunk.strip()]
+                )
             if new_texts:
                 add_style_examples(new_texts)
-                st.success(f"✅ Добавлено: {len(new_texts)}")
+                st.success(f"Добавлено: {len(new_texts)}")
                 st.rerun()
 
-    library = load_style_library()
-    if library:
-        if "selected_style_ids" not in st.session_state:
-            st.session_state.selected_style_ids = [e["id"] for e in library[-MAX_STYLE_EXAMPLES_IN_PROMPT:]]
+        library = load_style_library()
+        if library:
+            if "selected_style_ids" not in st.session_state:
+                st.session_state.selected_style_ids = [
+                    e["id"] for e in library[-MAX_STYLE_EXAMPLES_IN_PROMPT:]
+                ]
 
-        with st.expander(f"🎯 Примеры ({len(library)})"):
+            st.caption(f"В библиотеке: {len(library)}")
             for e in reversed(library):
-                col1, col2 = st.columns([4, 1])
+                col1, col2 = st.columns([5, 1])
                 with col1:
                     checked = st.checkbox(
-                        e["preview"][:50], 
-                        value=e["id"] in st.session_state.selected_style_ids, 
-                        key=f"chk_{e['id']}"
+                        e["preview"][:42],
+                        value=e["id"] in st.session_state.selected_style_ids,
+                        key=f"chk_{e['id']}",
                     )
                     if checked and e["id"] not in st.session_state.selected_style_ids:
                         st.session_state.selected_style_ids.append(e["id"])
                     elif not checked and e["id"] in st.session_state.selected_style_ids:
                         st.session_state.selected_style_ids.remove(e["id"])
                 with col2:
-                    if st.button("🗑️", key=f"del_{e['id']}", use_container_width=True):
+                    if st.button("×", key=f"del_{e['id']}", help="Удалить", use_container_width=True):
                         delete_style_example(e["id"])
                         st.rerun()
 
     st.divider()
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        if st.button("🔄", help="Заново", use_container_width=True):
-            for key in defaults:
-                st.session_state[key] = defaults[key]
-            st.rerun()
-    with col2:
-        if st.button("📊", help="Метрики", use_container_width=True):
+    st.caption("РАЗДЕЛЫ")
+
+    if st.button("Новый пост", use_container_width=True):
+        for key in defaults:
+            st.session_state[key] = defaults[key]
+        st.session_state.show_metrics = False
+        st.session_state.show_yandex = False
+        st.session_state.show_news = False
+        st.rerun()
+
+    nav1, nav2 = st.columns(2)
+    with nav1:
+        if st.button("Аналитика", use_container_width=True):
             st.session_state.show_metrics = True
-    with col3:
-        if st.button("📁", help="Яндекс.Диск", use_container_width=True):
-            st.session_state.show_yandex = True
-    with col4:
-        if st.button("📰", help="Новости", use_container_width=True):
+            st.session_state.show_yandex = False
+            st.session_state.show_news = False
+            st.rerun()
+    with nav2:
+        if st.button("Новости", use_container_width=True):
+            st.session_state.show_metrics = False
+            st.session_state.show_yandex = False
             st.session_state.show_news = True
+            st.rerun()
+
+    if st.button("База знаний", use_container_width=True):
+        st.session_state.show_metrics = False
+        st.session_state.show_yandex = True
+        st.session_state.show_news = False
+        st.rerun()
 
 # ============================================================
 # ОСНОВНОЙ ЭКРАН
 # ============================================================
 if not st.session_state.show_metrics and not st.session_state.show_yandex and not st.session_state.show_news:
-    left_column, right_column = st.columns([1.1, 0.9], gap="large")
+    render_page_hero(
+        "PR-портал ЦСР",
+        "Подготовка публикаций, работа с базой знаний, проверка фактуры и аналитика — в одном рабочем пространстве.",
+        "ЦСР · CONTENT INTELLIGENCE",
+    )
+    left_column, right_column = st.columns([1.08, 0.92], gap="large")
 
     with left_column:
-        st.subheader("📋 Исходные данные")
+        st.subheader("Исходные данные")
         with st.container(border=True):
             st.caption(f"Рубрика: {post_category}")
             field_values = build_dynamic_fields(post_category)
@@ -1123,7 +1237,7 @@ if not st.session_state.show_metrics and not st.session_state.show_yandex and no
                     f"Краткое содержание: {n.get('description', '')}"
                 )
             
-            source_tab1, source_tab2 = st.tabs(["📤 Загрузить файлы", "☁️ Яндекс.Диск"])
+            source_tab1, source_tab2 = st.tabs(["Загрузить файлы", "Яндекс.Диск"])
             
             uploaded_files = None
             with source_tab1:
@@ -1235,9 +1349,9 @@ if not st.session_state.show_metrics and not st.session_state.show_yandex and no
                             st.rerun()
 
     with right_column:
-        st.subheader("✨ Результат")
+        st.subheader("Результат")
         with st.container(border=True):
-            text_tab, fact_tab, history_tab, export_tab = st.tabs(["📄 Текст", "🔍 Проверка", "📋 История", "📥 Экспорт"])
+            text_tab, fact_tab, history_tab, export_tab = st.tabs(["Текст", "Проверка", "История", "Экспорт"])
 
             with text_tab:
                 if st.session_state.current_text:
@@ -1326,7 +1440,7 @@ if not st.session_state.show_metrics and not st.session_state.show_yandex and no
 # DASHBOARD МЕТРИК
 # ============================================================
 elif st.session_state.show_metrics:
-    st.subheader("📊 Аналитика и метрики")
+    render_page_hero("Аналитика", "Статистика публикаций, распределение по рубрикам, тону и объему.", "ЦСР · DASHBOARD")
     
     if st.button("← Вернуться"):
         st.session_state.show_metrics = False
@@ -1386,22 +1500,22 @@ elif st.session_state.show_metrics:
         st.bar_chart(df, use_container_width=True)
 
     with col1:
-        st.subheader("📂 По рубрикам")
+        st.subheader("По рубрикам")
         chart_from_pairs(metrics['by_category'], "Постов", strip_numbers=True)
 
     with col2:
-        st.subheader("🎙️ По тону")
+        st.subheader("По тону")
         chart_from_pairs(metrics['by_tone'], "Постов")
 
     st.divider()
 
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader("📏 По объему")
+        st.subheader("По объему")
         chart_from_pairs(metrics['by_length'], "Постов")
 
     with col2:
-        st.subheader("💬 Использование цитат")
+        st.subheader("Использование цитат")
         # Раньше здесь передавался словарь из чисел — Streamlit падал с ошибкой
         chart_from_pairs(
             [("С цитатами", metrics['with_citations']),
@@ -1411,7 +1525,7 @@ elif st.session_state.show_metrics:
     
     st.divider()
     
-    st.subheader("📋 История последних постов")
+    st.subheader("История последних постов")
     posts = get_posts_history(10)
     if posts:
         for post_id, category, tone, text, created_at, has_citations in posts:
@@ -1424,7 +1538,7 @@ elif st.session_state.show_metrics:
 # ЯНДЕКС.ДИСК БРАУЗЕР
 # ============================================================
 elif st.session_state.show_yandex:
-    st.subheader("☁️ База знаний ЦСР")
+    render_page_hero("База знаний", "Материалы ЦСР на Яндекс.Диске — для быстрого поиска и использования в публикациях.", "ЦСР · KNOWLEDGE BASE")
     
     if st.button("← Вернуться"):
         st.session_state.show_yandex = False
@@ -1479,7 +1593,7 @@ elif st.session_state.show_yandex:
             st.divider()
             
             if folders:
-                st.subheader("📁 Тематические папки")
+                st.subheader("Тематические папки")
                 for folder in sorted(folders, key=lambda x: x.get("name", "")):
                     folder_name = folder.get("name", "")
                     with st.expander(f"📁 {folder_name}"):
@@ -1516,7 +1630,7 @@ elif st.session_state.show_yandex:
             
             if files:
                 st.divider()
-                st.subheader("📄 Файлы в корне")
+                st.subheader("Файлы в корне")
                 for f in sorted(files, key=lambda x: x.get("name", "")):
                     file_name = f.get("name", "")
                     file_size = f.get("size", 0)
@@ -1545,7 +1659,7 @@ elif st.session_state.show_yandex:
 # МОНИТОРИНГ НОВОСТЕЙ
 # ============================================================
 elif st.session_state.show_news:
-    st.subheader("📰 Мониторинг новостей ЦСР")
+    render_page_hero("Мониторинг новостей", "Поиск упоминаний ЦСР и релевантных инфоповодов с возможностью сразу использовать материал в посте.", "ЦСР · MEDIA MONITOR")
     
     if st.button("← Вернуться"):
         st.session_state.show_news = False
